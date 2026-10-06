@@ -60,7 +60,6 @@ section { flex: 1; display: flex; flex-direction: column; gap: 16px; min-height:
 button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; touch-action: manipulation; }
 button:focus-visible { outline: 3px solid var(--sticker); outline-offset: 2px; }
 h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text-wrap: balance; }
-.sub { margin: 0; }
 
 /* home */
 .levels { display: flex; flex-direction: column; gap: 12px; }
@@ -80,6 +79,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .stars { flex: none; color: var(--sticker); font-size: 22px; letter-spacing: 2px; }
 .stars i { font-style: normal; opacity: .25; }
 .parent { margin-top: auto; font-size: 15px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.parent h2 { margin: 8px 0 0; font-size: 15px; font-weight: 600; color: var(--pencil); }
 .link { text-decoration: underline; padding: 6px 0; }
 .toggle { display: flex; align-items: center; gap: 10px; font-size: 18px; font-weight: 600; color: var(--ink); cursor: pointer; padding: 4px 0; }
 .toggle input { width: 26px; height: 26px; margin: 0; accent-color: var(--good); cursor: pointer; }
@@ -157,12 +157,13 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 <div id="app" dir="rtl" lang="he">
   <section id="home">
     <h1>ההכתבה של אורי</h1>
-    <p class="sub">שומעים מילה ובונים אותה. מתחילים משלב 1.</p>
     <div class="levels" id="levels"></div>
     <div class="parent">
       <span id="novoice" hidden>במכשיר הזה אין הקראה בעברית. אמרו לה את המילה לפי הציור.</span>
-      <label class="toggle"><input type="checkbox" id="little"><span>מוד אחים קטנים 🧸<small>התשובה הנכונה מסומנת, וכל השלבים פתוחים</small></span></label>
-      <button class="link" id="unlock">להורים: לפתוח את כל השלבים</button>
+      <h2>להורים</h2>
+      <label class="toggle"><input type="checkbox" id="little"><span>מוד אחים קטנים 🧸<small>התשובה הנכונה מסומנת, והכוכבים לא נשמרים</small></span></label>
+      <label class="toggle"><input type="checkbox" id="openall"><span>כל השלבים פתוחים</span></label>
+      <button class="link" id="reset">לאפס את הכוכבים</button>
     </div>
   </section>
 
@@ -215,7 +216,7 @@ const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאו
 const KEY = 'ori-dictation-v3', OLD_KEY = 'ori-dictation-v2';
 const $ = id => document.getElementById(id);
 
-/* little: younger siblings' mode — the right answer is highlighted, all levels open, Ori's stars untouched */
+/* little: younger siblings' mode — the right answer is highlighted and Ori's stars stay untouched */
 let best = LEVELS.map(() => 0), openAll = false, little = false, g = null;
 try {
   let s = JSON.parse(localStorage.getItem(KEY));
@@ -254,7 +255,7 @@ function tone(freqs) {
 
 /* screens */
 function show(id) { ['home', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
-function unlocked(i) { return openAll || little || i === 0 || best[i - 1] > 0; }
+function unlocked(i) { return openAll || i === 0 || best[i - 1] > 0; }
 function renderHome() {
   $('levels').innerHTML = '';
   LEVELS.forEach((L, i) => {
@@ -264,8 +265,9 @@ function renderHome() {
     b.onclick = () => startLevel(i);
     $('levels').appendChild(b);
   });
-  $('unlock').hidden = openAll || little;
   $('little').checked = little;
+  $('openall').checked = openAll;
+  $('reset').hidden = !best.some(Boolean);
   $('novoice').hidden = !!synth;
   show('home');
 }
@@ -472,7 +474,8 @@ $('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cance
 $('again').onclick = () => startLevel(g.lvl);
 $('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
 $('little').onchange = e => { little = e.target.checked; save(); renderHome(); };
-$('unlock').onclick = () => { openAll = true; save(); renderHome(); };
+$('openall').onchange = e => { openAll = e.target.checked; save(); renderHome(); };
+$('reset').onclick = () => { if (!confirm('לאפס את כל הכוכבים ולהתחיל משלב 1?')) return; best = LEVELS.map(() => 0); save(); renderHome(); };
 /* no pinch zoom: iOS Safari ignores user-scalable=no */
 document.addEventListener('gesturestart', e => e.preventDefault());
 if (synth) synth.getVoices();
