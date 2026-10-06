@@ -94,7 +94,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .say .pic { position: absolute; inset-inline-end: -14px; bottom: -10px; font-size: 44px; }
 .say:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--tile-edge); }
 .task { margin: 0; font-size: 20px; font-weight: 600; color: var(--ink); min-height: 1.4em; text-align: center; }
-.slots { display: flex; gap: 8px; justify-content: center; }
+.slots { display: flex; gap: 8px; justify-content: center; min-height: 104px; }
 .slot {
   width: min(19vw, 84px); height: 104px;
   border-bottom: 5px solid var(--pencil); border-radius: 10px 10px 0 0;
@@ -104,6 +104,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .slot.next { border-bottom-color: var(--sticker); background: color-mix(in srgb, var(--sticker) 18%, transparent); }
 .slot.sel { background: color-mix(in srgb, var(--sticker) 40%, transparent); border-bottom-color: var(--sticker); }
 .slot.ok { color: var(--good); border-bottom-color: var(--good); }
+.slot.bad { color: var(--bad); border-bottom-color: var(--bad); }
 .slots.win .slot { animation: hop .5s both; }
 .slots.win .slot:nth-child(2) { animation-delay: .08s; }
 .slots.win .slot:nth-child(3) { animation-delay: .16s; }
@@ -204,14 +205,15 @@ const LEVELS = [
   { title: 'רק אותיות', ex: SH + ' ' + R, mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
   { title: 'אותיות עם ניקוד', ex: SH + K + ' ' + R + P + ' ' + SH + S, mode: 'pointed', reps: 2, task: 'בחרי אות עם הניקוד הנכון' },
   { title: 'קודם אות, אחר כך ניקוד', ex: R + ' ← ' + R + P, mode: 'split', reps: 1, task: '' },
+  { title: 'בלי עזרה', ex: '? ? ?', mode: 'free', reps: 1, task: 'בני את כל המילה ולחצי בדיקה' },
   { title: 'כותבים באצבע', ex: text(WORDS[0]), mode: 'write', reps: 1, task: 'כתבי את המילה' },
 ];
 const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאוד!', 'אלופה!'];
-const KEY = 'ori-dictation-v1';
+const KEY = 'ori-dictation-v2';
 const $ = id => document.getElementById(id);
 
-let best = [0, 0, 0, 0], openAll = false, g = null;
-try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.best) { best = s.best; openAll = !!s.openAll; } } catch (e) {}
+let best = LEVELS.map(() => 0), openAll = false, g = null;
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.best) { best = LEVELS.map((_, i) => s.best[i] || 0); openAll = !!s.openAll; } } catch (e) {}
 const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ best, openAll })); } catch (e) {} };
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const stars = n => '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i>';
@@ -276,7 +278,7 @@ function nextQ() {
   g.qi++;
   if (g.qi >= g.queue.length) return finish();
   const item = g.queue[g.qi];
-  Object.assign(g, { item, w: item.w, order: shuffle(NIKUD), pos: 0, mistakes: 0, slotMist: 0, sel: null, busy: false,
+  Object.assign(g, { item, w: item.w, order: shuffle(NIKUD), pos: 0, mistakes: 0, slotMist: 0, sel: null, busy: false, built: [], marks: null, fails: 0,
     phase: g.L.mode === 'split' ? 'letters' : g.L.mode, done: item.w.parts.map(() => false) });
   $('prog').style.width = (g.qi / g.queue.length * 100) + '%';
   $('pic').textContent = g.w.pic;
@@ -293,7 +295,12 @@ function render() {
     : phase === 'nikud' ? (g.sel === null ? 'לחצי על אות כדי לנקד אותה' : 'איזה ניקוד מתאים?') : g.L.task;
 
   slots.innerHTML = '';
-  w.parts.forEach((p, i) => {
+  if (phase === 'free') g.built.forEach((t, i) => {
+    const s = document.createElement('div');
+    s.className = 'slot' + (g.marks ? (g.marks[i] ? ' ok' : ' bad') : '');
+    s.textContent = t; slots.appendChild(s);
+  });
+  else w.parts.forEach((p, i) => {
     const s = document.createElement(phase === 'nikud' ? 'button' : 'div');
     s.className = 'slot';
     if (phase === 'nikud') {
@@ -308,6 +315,7 @@ function render() {
   tray.innerHTML = '';
   tray.className = 'tray';
   if (phase === 'write') return renderWrite();
+  if (phase === 'free') return renderFree();
   let opts, want;
   if (phase === 'letters') { opts = [SH, R]; want = w.parts[g.pos][0]; tray.classList.add('two'); }
   else if (phase === 'pointed') { opts = [SH, R].flatMap(l => g.order.map(n => l + n)); want = glyph(w.parts[g.pos]); }
@@ -319,6 +327,36 @@ function render() {
     b.onclick = () => pick(b, o === want, want);
     tray.appendChild(b);
   });
+}
+
+/* build the whole word with no slots and no feedback until she presses check */
+function renderFree() {
+  const tray = $('tray');
+  [SH, R].flatMap(l => g.order.map(n => l + n)).forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'tile'; b.textContent = o;
+    b.onclick = () => { if (g.busy || g.built.length >= 5) return; g.built.push(o); g.marks = null; render(); };
+    tray.appendChild(b);
+  });
+  const row = document.createElement('div'); row.className = 'row'; row.style.gridColumn = '1 / -1';
+  const btn = (label, main, fn) => { const b = document.createElement('button'); b.className = 'btn' + (main ? ' main' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); };
+  btn('מחיקה', false, () => { if (g.busy) return; g.built.pop(); g.marks = null; render(); });
+  btn('בדיקה', true, () => {
+    if (g.busy || !g.built.length) return;
+    const want = g.w.parts.map(glyph);
+    if (g.built.length === want.length && g.built.every((t, i) => t === want[i])) return win();
+    g.mistakes++; g.fails++;
+    tone([180]);
+    g.marks = g.built.map((t, i) => t === want[i]);
+    render();
+    $('task').textContent = 'כמעט. מה צריך לתקן?';
+    if (g.fails >= 2) {
+      const q = g.qi;
+      $('model').textContent = text(g.w); $('model').hidden = false;
+      setTimeout(() => { if (g.qi === q && g.phase === 'free') $('model').hidden = true; }, 2500);
+    }
+  });
+  tray.appendChild(row);
 }
 
 function pick(btn, right, want) {
@@ -386,14 +424,20 @@ function renderWrite() {
     row.innerHTML = ''; $('model').hidden = true; $('task').textContent = g.L.task;
     btn('למחוק', false, fit);
     btn('בדיקה', true, () => {
-      $('model').textContent = text(g.w); $('model').hidden = false;
-      $('task').textContent = 'יצא לך אותו דבר?';
-      row.innerHTML = '';
-      btn('אנסה שוב', false, () => { g.mistakes++; fit(); ask(); });
-      btn('כן, יצא לי!', true, () => {
-        if (g.mistakes === 0) g.clean++;
-        tone([660, 880, 1100]); nextQ();
-      });
+      const checks = [
+        { q: 'האותיות באותו סדר?', show: g.w.parts.map(p => p[0][0]).join('') },
+        { q: 'יש נקודה מעל כל שין?', show: SH },
+        { q: 'הניקוד מתחת לאותיות אותו דבר?', show: text(g.w) },
+      ];
+      const step = k => {
+        if (k >= checks.length) { if (g.mistakes === 0) g.clean++; tone([660, 880, 1100]); return nextQ(); }
+        $('model').textContent = checks[k].show; $('model').hidden = false;
+        $('task').textContent = checks[k].q; speak(checks[k].q);
+        row.innerHTML = '';
+        btn('לא, אתקן', false, () => { g.mistakes++; ask(); });
+        btn('כן', true, () => step(k + 1));
+      };
+      step(0);
     });
   };
   ask();
