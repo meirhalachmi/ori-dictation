@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="robots" content="noindex">
+<style>:root{color-scheme:light;padding:env(safe-area-inset-top,0px) 0 env(safe-area-inset-bottom,0px);box-sizing:border-box}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<title>ההכתבה של אורי</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;600&family=Noto+Sans+Hebrew:wght@500;700&display=swap">
+<style>
+/* Layout: one-screen notebook page — sound button on top, word slots in the middle, tile tray at the bottom */
+:root {
+  --paper: #f6f9fd;
+  --line: #c3d6ee;
+  --margin: #e56a80;
+  --ink: #2343b0;
+  --pencil: #454a58;
+  --tile: #ffffff;
+  --tile-edge: #b7c6dd;
+  --sticker: #f9b91c;
+  --good: #23946a;
+  --bad: #d9475f;
+  --ui: "Fredoka", "Arial Hebrew", "Noto Sans Hebrew", sans-serif;
+  --letters: "Noto Sans Hebrew", "Arial Hebrew", "Arial", sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --paper: #1d3a32; --line: #2f5548; --margin: #e68a9b; --ink: #f3f1e4; --pencil: #dcdccd;
+    --tile: #27493f; --tile-edge: #4a7566; --sticker: #f6cf4d; --good: #7fdcae; --bad: #ff9aa8;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --paper: #1d3a32; --line: #2f5548; --margin: #e68a9b; --ink: #f3f1e4; --pencil: #dcdccd;
+  --tile: #27493f; --tile-edge: #4a7566; --sticker: #f6cf4d; --good: #7fdcae; --bad: #ff9aa8;
+  color-scheme: dark;
+}
+html, body { height: 100%; }
+body {
+  background: var(--paper);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 39px, var(--line) 39px 40px);
+  color: var(--pencil);
+  font-family: var(--ui);
+  font-size: 18px;
+  -webkit-tap-highlight-color: transparent;
+  user-select: none; -webkit-user-select: none;
+  overflow-x: hidden;
+}
+#app {
+  height: 100%; max-width: 520px; margin: 0 auto;
+  padding-inline: 16px; padding-block: 12px;
+  border-inline-start: 2px solid var(--margin);
+  display: flex; flex-direction: column;
+}
+section { flex: 1; display: flex; flex-direction: column; gap: 16px; min-height: 0; }
+button { font: inherit; color: inherit; cursor: pointer; border: 0; background: none; touch-action: manipulation; }
+button:focus-visible { outline: 3px solid var(--sticker); outline-offset: 2px; }
+h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text-wrap: balance; }
+.sub { margin: 0; }
+
+/* home */
+.levels { display: flex; flex-direction: column; gap: 12px; }
+.level {
+  display: flex; align-items: center; gap: 14px; text-align: start;
+  background: var(--tile); border: 2px solid var(--tile-edge); border-bottom-width: 6px;
+  border-radius: 18px; padding: 12px 16px;
+}
+.level[disabled] { opacity: .45; cursor: default; }
+.level .num {
+  flex: none; width: 44px; height: 44px; border-radius: 50%;
+  background: var(--ink); color: var(--paper);
+  display: grid; place-items: center; font-weight: 600; font-size: 22px;
+}
+.level .txt { flex: 1; min-width: 0; font-weight: 600; font-size: 20px; color: var(--ink); }
+.level .ex { display: block; font-family: var(--letters); font-weight: 500; font-size: 22px; color: var(--pencil); line-height: 1.7; }
+.stars { flex: none; color: var(--sticker); font-size: 22px; letter-spacing: 2px; }
+.stars i { font-style: normal; opacity: .25; }
+.parent { margin-top: auto; font-size: 15px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
+.link { text-decoration: underline; padding: 6px 0; }
+
+/* game */
+.bar { display: flex; align-items: center; gap: 12px; }
+.back { font-size: 26px; width: 44px; height: 44px; border-radius: 50%; background: var(--tile); border: 2px solid var(--tile-edge); }
+.track { flex: 1; height: 14px; border-radius: 7px; background: var(--line); overflow: hidden; }
+.track b { display: block; height: 100%; width: 0; background: var(--sticker); transition: width .4s; }
+.stage { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; min-height: 0; }
+.say {
+  width: 124px; height: 124px; border-radius: 50%;
+  background: var(--ink); color: var(--paper);
+  display: grid; place-items: center; position: relative;
+  box-shadow: 0 6px 0 var(--tile-edge);
+}
+.say svg { width: 60px; height: 60px; }
+.say .pic { position: absolute; inset-inline-end: -14px; bottom: -10px; font-size: 44px; }
+.say:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--tile-edge); }
+.task { margin: 0; font-size: 20px; font-weight: 600; color: var(--ink); min-height: 1.4em; text-align: center; }
+.slots { display: flex; gap: 8px; justify-content: center; }
+.slot {
+  width: min(19vw, 84px); height: 104px;
+  border-bottom: 5px solid var(--pencil); border-radius: 10px 10px 0 0;
+  font-family: var(--letters); font-weight: 700; font-size: 54px; line-height: 84px;
+  text-align: center; color: var(--pencil); padding: 0;
+}
+.slot.next { border-bottom-color: var(--sticker); background: color-mix(in srgb, var(--sticker) 18%, transparent); }
+.slot.sel { background: color-mix(in srgb, var(--sticker) 40%, transparent); border-bottom-color: var(--sticker); }
+.slot.ok { color: var(--good); border-bottom-color: var(--good); }
+.slots.win .slot { animation: hop .5s both; }
+.slots.win .slot:nth-child(2) { animation-delay: .08s; }
+.slots.win .slot:nth-child(3) { animation-delay: .16s; }
+.slots.win .slot:nth-child(4) { animation-delay: .24s; }
+.tray { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; min-height: 196px; align-content: center; }
+.tray.two { grid-template-columns: repeat(2, 1fr); }
+.tile {
+  background: var(--tile); border: 2px solid var(--tile-edge); border-bottom-width: 6px; border-radius: 16px;
+  font-family: var(--letters); font-weight: 700; font-size: 46px; line-height: 1; color: var(--ink);
+  height: 92px; padding: 0 0 10px;
+}
+.tray.two .tile { font-size: 60px; height: 120px; }
+.tile:active { transform: translateY(3px); border-bottom-width: 3px; }
+.tile.no { animation: shake .35s; border-color: var(--bad); }
+.tile.hint { border-color: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 35%, transparent); }
+.tray p { grid-column: 1 / -1; text-align: center; margin: 0; font-size: 20px; }
+
+/* write */
+.pad { width: 100%; height: 200px; position: relative; border: 2px solid var(--tile-edge); border-radius: 16px; background: var(--tile);
+  background-image: linear-gradient(to bottom, transparent 139px, var(--line) 139px 141px, transparent 141px); }
+.pad canvas { width: 100%; height: 100%; display: block; touch-action: none; border-radius: 14px; }
+.model { font-family: var(--letters); font-weight: 700; font-size: 64px; line-height: 1.5; color: var(--good); margin: 0; }
+.row { display: flex; gap: 10px; flex-wrap: wrap; justify-content: center; }
+.btn {
+  background: var(--tile); border: 2px solid var(--tile-edge); border-bottom-width: 5px; border-radius: 14px;
+  padding: 12px 20px; font-weight: 600; font-size: 20px; color: var(--ink);
+}
+.btn.main { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+
+/* done */
+#done { align-items: center; justify-content: center; text-align: center; }
+.big { font-size: 64px; color: var(--sticker); letter-spacing: 6px; animation: hop .7s both; }
+.big i { font-style: normal; opacity: .25; }
+.mission { background: var(--tile); border: 2px dashed var(--margin); border-radius: 16px; padding: 14px 16px; margin: 0; }
+
+@keyframes shake { 25% { transform: translateX(7px); } 50% { transform: translateX(-7px); } 75% { transform: translateX(4px); } }
+@keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-16px); } 100% { transform: translateY(0); } }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+@media (max-height: 640px) {
+  .say { width: 92px; height: 92px; } .say svg { width: 44px; height: 44px; }
+  .tray { min-height: 170px; } .tile { height: 78px; } .pad { height: 160px; }
+  .pad { background-image: linear-gradient(to bottom, transparent 109px, var(--line) 109px 111px, transparent 111px); }
+}
+</style>
+</head>
+<body>
+
+<div id="app" dir="rtl" lang="he">
+  <section id="home">
+    <h1>ההכתבה של אורי</h1>
+    <p class="sub">שומעים מילה ובונים אותה. מתחילים משלב 1.</p>
+    <div class="levels" id="levels"></div>
+    <div class="parent">
+      <span id="novoice" hidden>במכשיר הזה אין הקראה בעברית. אמרו לה את המילה לפי הציור.</span>
+      <button class="link" id="unlock">להורים: לפתוח את כל השלבים</button>
+    </div>
+  </section>
+
+  <section id="game" hidden>
+    <div class="bar">
+      <button class="back" id="back" aria-label="חזרה לשלבים">→</button>
+      <div class="track"><b id="prog"></b></div>
+    </div>
+    <div class="stage">
+      <button class="say" id="say" aria-label="להשמיע את המילה">
+        <svg viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M3 9v6h4l5 4V5L7 9H3z"/><path d="M15 8.5a4.5 4.5 0 0 1 0 7M17.5 5.5a8.5 8.5 0 0 1 0 13" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <span class="pic" id="pic"></span>
+      </button>
+      <p class="task" id="task"></p>
+      <div class="slots" id="slots"></div>
+      <p class="model" id="model" hidden></p>
+    </div>
+    <div class="tray" id="tray"></div>
+  </section>
+
+  <section id="done" hidden>
+    <div class="big" id="bigstars"></div>
+    <h1 id="donetitle">כל הכבוד!</h1>
+    <p class="mission" id="mission" hidden>עכשיו במחברת: אבא או אמא אומרים את שלוש המילים, ואת כותבת אותן בעיפרון.</p>
+    <div class="row">
+      <button class="btn" id="again">עוד פעם</button>
+      <button class="btn main" id="onward">לשלב הבא</button>
+    </div>
+  </section>
+</div>
+
+<script>
+const SH = 'שׁ', R = 'ר', K = 'ָ', P = 'ַ', S = 'ְ';
+const NIKUD = [K, P, S, ''];
+const WORDS = [
+  { parts: [[SH, K], [R, '']], pic: '🎤' },
+  { parts: [[R, K], [SH, '']], pic: '🪙' },
+  { parts: [[R, P], [SH, S], [R, P], [SH, '']], pic: '🍃' },
+];
+const glyph = p => p[0] + p[1];
+const text = w => w.parts.map(glyph).join('');
+const LEVELS = [
+  { title: 'רק אותיות', ex: SH + ' ' + R, mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
+  { title: 'אותיות עם ניקוד', ex: SH + K + ' ' + R + P + ' ' + SH + S, mode: 'pointed', reps: 2, task: 'בחרי אות עם הניקוד הנכון' },
+  { title: 'קודם אות, אחר כך ניקוד', ex: R + ' ← ' + R + P, mode: 'split', reps: 1, task: '' },
+  { title: 'כותבים באצבע', ex: text(WORDS[0]), mode: 'write', reps: 1, task: 'כתבי את המילה' },
+];
+const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאוד!', 'אלופה!'];
+const KEY = 'ori-dictation-v1';
+const $ = id => document.getElementById(id);
+
+let best = [0, 0, 0, 0], openAll = false, g = null;
+try { const s = JSON.parse(localStorage.getItem(KEY)); if (s && s.best) { best = s.best; openAll = !!s.openAll; } } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ best, openAll })); } catch (e) {} };
+const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
+const stars = n => '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i>';
+
+/* sound */
+const synth = window.speechSynthesis;
+function speak(t) {
+  if (!synth) return;
+  try {
+    synth.cancel();
+    const u = new SpeechSynthesisUtterance(t);
+    u.lang = 'he-IL'; u.rate = 0.75;
+    const v = synth.getVoices().find(v => /^(he|iw)/i.test(v.lang));
+    if (v) u.voice = v;
+    synth.speak(u);
+  } catch (e) {}
+}
+let ac;
+function tone(freqs) {
+  try {
+    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    freqs.forEach((f, i) => {
+      const o = ac.createOscillator(), a = ac.createGain(), t = ac.currentTime + i * 0.11;
+      o.frequency.value = f; o.type = 'triangle';
+      a.gain.setValueAtTime(0.18, t); a.gain.exponentialRampToValueAtTime(0.001, t + 0.25);
+      o.connect(a).connect(ac.destination); o.start(t); o.stop(t + 0.26);
+    });
+  } catch (e) {}
+}
+
+/* screens */
+function show(id) { ['home', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
+function unlocked(i) { return openAll || i === 0 || best[i - 1] > 0; }
+function renderHome() {
+  $('levels').innerHTML = '';
+  LEVELS.forEach((L, i) => {
+    const b = document.createElement('button');
+    b.className = 'level'; b.disabled = !unlocked(i);
+    b.innerHTML = `<span class="num">${i + 1}</span><span class="txt">${L.title}<span class="ex">${L.ex}</span></span><span class="stars">${stars(best[i])}</span>`;
+    b.onclick = () => startLevel(i);
+    $('levels').appendChild(b);
+  });
+  $('unlock').hidden = openAll;
+  $('novoice').hidden = !!synth;
+  show('home');
+}
+
+function startLevel(i) {
+  const L = LEVELS[i];
+  let queue = [];
+  for (let r = 0; r < L.reps; r++) {
+    let block = shuffle(WORDS);
+    if (queue.length && queue[queue.length - 1].w === block[0]) block.push(block.shift());
+    queue = queue.concat(block.map(w => ({ w, retry: false })));
+  }
+  g = { lvl: i, L, queue, total: queue.length, qi: -1, clean: 0 };
+  show('game');
+  nextQ();
+}
+
+function nextQ() {
+  g.qi++;
+  if (g.qi >= g.queue.length) return finish();
+  const item = g.queue[g.qi];
+  Object.assign(g, { item, w: item.w, order: shuffle(NIKUD), pos: 0, mistakes: 0, slotMist: 0, sel: null, busy: false,
+    phase: g.L.mode === 'split' ? 'letters' : g.L.mode, done: item.w.parts.map(() => false) });
+  $('prog').style.width = (g.qi / g.queue.length * 100) + '%';
+  $('pic').textContent = g.w.pic;
+  $('model').hidden = true;
+  $('slots').classList.remove('win');
+  render();
+  speak(text(g.w));
+}
+
+function render() {
+  const { w, phase } = g, slots = $('slots'), tray = $('tray');
+  slots.hidden = phase === 'write';
+  $('task').textContent = phase === 'letters' && g.L.mode === 'split' ? 'קודם בוחרים אותיות'
+    : phase === 'nikud' ? (g.sel === null ? 'לחצי על אות כדי לנקד אותה' : 'איזה ניקוד מתאים?') : g.L.task;
+
+  slots.innerHTML = '';
+  w.parts.forEach((p, i) => {
+    const s = document.createElement(phase === 'nikud' ? 'button' : 'div');
+    s.className = 'slot';
+    if (phase === 'nikud') {
+      s.textContent = g.done[i] ? glyph(p) : p[0];
+      if (g.done[i]) s.classList.add('ok');
+      else { s.onclick = () => { g.sel = i; g.slotMist = 0; render(); }; if (g.sel === i) s.classList.add('sel'); else if (g.sel === null) s.classList.add('next'); }
+    } else if (i < g.pos) s.textContent = phase === 'pointed' ? glyph(p) : p[0];
+    else if (i === g.pos) s.classList.add('next');
+    slots.appendChild(s);
+  });
+
+  tray.innerHTML = '';
+  tray.className = 'tray';
+  if (phase === 'write') return renderWrite();
+  let opts, want;
+  if (phase === 'letters') { opts = [SH, R]; want = w.parts[g.pos][0]; tray.classList.add('two'); }
+  else if (phase === 'pointed') { opts = [SH, R].flatMap(l => g.order.map(n => l + n)); want = glyph(w.parts[g.pos]); }
+  else if (g.sel === null) { tray.innerHTML = '<p>☝️</p>'; return; }
+  else { const l = w.parts[g.sel][0]; opts = g.order.map(n => l + n); want = glyph(w.parts[g.sel]); }
+  opts.forEach(o => {
+    const b = document.createElement('button');
+    b.className = 'tile'; b.textContent = o;
+    b.onclick = () => pick(b, o === want, want);
+    tray.appendChild(b);
+  });
+}
+
+function pick(btn, right, want) {
+  if (g.busy) return;
+  if (!right) {
+    g.mistakes++; g.slotMist++;
+    tone([180]);
+    btn.classList.remove('no'); void btn.offsetWidth; btn.classList.add('no');
+    if (g.slotMist >= 2) [...$('tray').children].forEach(b => { if (b.textContent === want) b.classList.add('hint'); });
+    return;
+  }
+  g.slotMist = 0;
+  const n = g.w.parts.length;
+  if (g.phase === 'nikud') {
+    g.done[g.sel] = true; g.sel = null;
+    if (g.done.every(Boolean)) return win();
+  } else {
+    g.pos++;
+    if (g.pos >= n) {
+      if (g.L.mode === 'split') { g.phase = 'nikud'; g.pos = n; }
+      else return win();
+    }
+  }
+  tone([660]);
+  render();
+}
+
+function win() {
+  g.busy = true;
+  [...$('slots').children].forEach((s, i) => { s.textContent = glyph(g.w.parts[i]); s.classList.add('ok'); s.classList.remove('next', 'sel'); });
+  $('slots').classList.add('win');
+  $('tray').innerHTML = '';
+  $('task').textContent = PRAISE[Math.random() * PRAISE.length | 0];
+  tone([660, 880, 1100]);
+  setTimeout(() => speak(text(g.w)), 350);
+  if (g.mistakes === 0) { if (!g.item.retry) g.clean++; }
+  else if (!g.item.retry) g.queue.push({ w: g.w, retry: true });
+  setTimeout(nextQ, 1700);
+}
+
+/* level 4: finger writing, checked by the child against the model */
+function renderWrite() {
+  const tray = $('tray');
+  tray.innerHTML = `<p style="font-size:16px">אפשר גם לכתוב במחברת ואז ללחוץ על בדיקה</p>`;
+  const pad = document.createElement('div'); pad.className = 'pad'; pad.style.gridColumn = '1 / -1';
+  const c = document.createElement('canvas'); pad.appendChild(c);
+  const row = document.createElement('div'); row.className = 'row'; row.style.gridColumn = '1 / -1';
+  tray.append(pad, row);
+  const dpr = window.devicePixelRatio || 1;
+  const ctx = c.getContext('2d');
+  const fit = () => {
+    c.width = c.clientWidth * dpr; c.height = c.clientHeight * dpr;
+    ctx.scale(dpr, dpr); ctx.lineWidth = 6; ctx.lineCap = ctx.lineJoin = 'round';
+    ctx.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--ink').trim() || '#2343b0';
+  };
+  requestAnimationFrame(fit);
+  let last = null;
+  const at = e => { const r = c.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top]; };
+  c.onpointerdown = e => { e.preventDefault(); c.setPointerCapture(e.pointerId); last = at(e); ctx.beginPath(); ctx.arc(last[0], last[1], 0.1, 0, 7); ctx.stroke(); };
+  c.onpointermove = e => { if (!last) return; const p = at(e); ctx.beginPath(); ctx.moveTo(last[0], last[1]); ctx.lineTo(p[0], p[1]); ctx.stroke(); last = p; };
+  c.onpointerup = c.onpointercancel = () => { last = null; };
+
+  const btn = (label, main, fn) => { const b = document.createElement('button'); b.className = 'btn' + (main ? ' main' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); };
+  const ask = () => {
+    row.innerHTML = ''; $('model').hidden = true; $('task').textContent = g.L.task;
+    btn('למחוק', false, fit);
+    btn('בדיקה', true, () => {
+      $('model').textContent = text(g.w); $('model').hidden = false;
+      $('task').textContent = 'יצא לך אותו דבר?';
+      row.innerHTML = '';
+      btn('אנסה שוב', false, () => { g.mistakes++; fit(); ask(); });
+      btn('כן, יצא לי!', true, () => {
+        if (g.mistakes === 0) g.clean++;
+        tone([660, 880, 1100]); nextQ();
+      });
+    });
+  };
+  ask();
+}
+
+function finish() {
+  const n = g.clean === g.total ? 3 : g.clean * 2 >= g.total ? 2 : 1;
+  best[g.lvl] = Math.max(best[g.lvl], n); save();
+  const last = g.lvl === LEVELS.length - 1;
+  $('bigstars').innerHTML = stars(n);
+  $('donetitle').textContent = last ? 'סיימת את כל השלבים!' : 'סיימת את שלב ' + (g.lvl + 1) + '!';
+  $('mission').hidden = !last;
+  $('onward').textContent = last ? 'לכל השלבים' : 'לשלב הבא';
+  tone([523, 659, 784, 1047]);
+  show('done');
+}
+
+$('say').onclick = () => { if (g) speak(text(g.w)); };
+$('back').onclick = () => { if (synth) synth.cancel(); renderHome(); };
+$('again').onclick = () => startLevel(g.lvl);
+$('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
+$('unlock').onclick = () => { openAll = true; save(); renderHome(); };
+if (synth) synth.getVoices();
+renderHome();
+</script>
+</body>
+</html>
