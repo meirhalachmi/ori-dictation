@@ -183,7 +183,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
   <section id="done" hidden>
     <div class="big" id="bigstars"></div>
     <h1 id="donetitle">כל הכבוד!</h1>
-    <p class="mission" id="mission" hidden>עכשיו במחברת: אבא או אמא אומרים את שלוש המילים, ואת כותבת אותן בעיפרון.</p>
+    <p class="mission" id="mission" hidden>מחר בכיתה עושים בדיוק אותו דבר. בהצלחה!</p>
     <div class="row">
       <button class="btn" id="again">עוד פעם</button>
       <button class="btn main" id="onward">לשלב הבא</button>
@@ -207,6 +207,7 @@ const LEVELS = [
   { title: 'קודם אות, אחר כך ניקוד', ex: R + ' ← ' + R + P, mode: 'split', reps: 1, task: '' },
   { title: 'בלי עזרה', ex: '? ? ?', mode: 'free', reps: 1, task: 'בני את כל המילה ולחצי בדיקה' },
   { title: 'כותבים באצבע', ex: text(WORDS[0]), mode: 'write', reps: 1, task: 'כתבי את המילה' },
+  { title: 'הכתבה אמיתית', ex: 'במחברת, בעיפרון', mode: 'dictation', reps: 1, task: '' },
 ];
 const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאוד!', 'אלופה!'];
 const KEY = 'ori-dictation-v2';
@@ -271,6 +272,7 @@ function startLevel(i) {
   }
   g = { lvl: i, L, queue, total: queue.length, qi: -1, clean: 0 };
   show('game');
+  if (L.mode === 'dictation') return startDictation();
   nextQ();
 }
 
@@ -443,6 +445,46 @@ function renderWrite() {
   ask();
 }
 
+/* last level: like in class — three words in a row into the notebook, checked only at the end */
+function startDictation() {
+  const words = shuffle(WORDS), tray = $('tray'), me = g;
+  let k = -1;
+  g.w = null; g.total = words.length;
+  $('slots').hidden = true; $('model').hidden = true; $('pic').textContent = '';
+  tray.className = 'tray';
+  const row = () => { tray.innerHTML = ''; const r = document.createElement('div'); r.className = 'row'; r.style.gridColumn = '1 / -1'; tray.appendChild(r); return r; };
+  const btn = (r, label, fn) => { const b = document.createElement('button'); b.className = 'btn main'; b.textContent = label; b.onclick = fn; r.appendChild(b); };
+  const next = () => {
+    clearTimeout(g.timer); k++;
+    $('prog').style.width = (Math.min(k, words.length) / words.length * 100) + '%';
+    if (k >= words.length) return reveal();
+    g.w = words[k];
+    $('task').textContent = 'מילה ' + (k + 1) + ': כתבי במחברת';
+    speak(text(g.w));
+    const cur = k;
+    g.timer = setTimeout(() => { if (g === me && k === cur && !$('game').hidden) speak(text(words[cur])); }, 3500);
+    btn(row(), 'כתבתי', next);
+  };
+  const reveal = () => {
+    g.w = null;
+    $('task').textContent = 'בודקים! לחצי על כל מילה שיצאה נכון';
+    tray.innerHTML = '';
+    const ok = words.map(() => false);
+    words.forEach((w, i) => {
+      const b = document.createElement('button');
+      b.className = 'tile'; b.style.gridColumn = '1 / -1';
+      const label = () => { b.textContent = (i + 1) + '.  ' + text(w) + (ok[i] ? '  ✓' : ''); b.classList.toggle('hint', ok[i]); };
+      b.onclick = () => { ok[i] = !ok[i]; label(); };
+      label(); tray.appendChild(b);
+    });
+    const r = document.createElement('div'); r.className = 'row'; r.style.gridColumn = '1 / -1'; tray.appendChild(r);
+    btn(r, 'סיימתי', () => { g.clean = ok.filter(Boolean).length; finish(); });
+  };
+  $('prog').style.width = '0%';
+  $('task').textContent = 'מחברת ועיפרון מוכנים?';
+  btn(row(), 'מתחילים', next);
+}
+
 function finish() {
   const n = g.clean === g.total ? 3 : g.clean * 2 >= g.total ? 2 : 1;
   best[g.lvl] = Math.max(best[g.lvl], n); save();
@@ -455,8 +497,8 @@ function finish() {
   show('done');
 }
 
-$('say').onclick = () => { if (g) speak(text(g.w)); };
-$('back').onclick = () => { if (synth) synth.cancel(); renderHome(); };
+$('say').onclick = () => { if (g && g.w) speak(text(g.w)); };
+$('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cancel(); renderHome(); };
 $('again').onclick = () => startLevel(g.lvl);
 $('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
 $('unlock').onclick = () => { openAll = true; save(); renderHome(); };
