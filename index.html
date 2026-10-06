@@ -333,12 +333,12 @@ function pick(btn, right, want) {
   g.slotMist = 0;
   const n = g.w.parts.length;
   if (g.phase === 'nikud') {
-    g.done[g.sel] = true; g.sel = null;
-    if (g.done.every(Boolean)) return win();
+    g.done[g.sel] = true; g.sel = g.done.indexOf(false);
+    if (g.sel < 0) return win();
   } else {
     g.pos++;
     if (g.pos >= n) {
-      if (g.L.mode === 'split') { g.phase = 'nikud'; g.pos = n; }
+      if (g.L.mode === 'split') { g.phase = 'nikud'; g.pos = n; g.sel = 0; }
       else return win();
     }
   }
