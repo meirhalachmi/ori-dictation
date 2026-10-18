@@ -161,6 +161,13 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .big i { font-style: normal; opacity: .25; }
 .mission { background: var(--tile); border: 2px dashed var(--margin); border-radius: 16px; padding: 14px 16px; margin: 0; }
 
+/* recording sheet */
+.sheet { position: fixed; inset: 0; z-index: 10; background: rgb(0 0 0 / .45); display: grid; place-items: center; padding: 16px; }
+.sheet .card { width: min(100%, 420px); box-sizing: border-box; background: var(--paper); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
+.sheet .model { color: var(--ink); line-height: 1.3; }
+.note { margin: 0; font-size: 16px; }
+.btn.rec { background: var(--bad); border-color: var(--bad); animation: pulse 1s infinite; }
+@keyframes pulse { 50% { opacity: .7; } }
 @keyframes shake { 25% { transform: translateX(7px); } 50% { transform: translateX(-7px); } 75% { transform: translateX(4px); } }
 @keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-16px); } 100% { transform: translateY(0); } }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
@@ -182,6 +189,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
       <h2>להורים</h2>
       <label class="toggle"><input type="checkbox" id="little"><span>מוד אחים קטנים 🧸<small>התשובה הנכונה מסומנת, והכוכבים לא נשמרים</small></span></label>
       <label class="toggle"><input type="checkbox" id="openall"><span>כל השלבים פתוחים</span></label>
+      <button class="link" id="recwords">🎙️ להקליט את המילים בקול שלכם</button>
       <button class="link" id="reset">לאפס את הכוכבים</button>
     </div>
   </section>
@@ -194,10 +202,20 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
     <div class="levels" id="dicts"></div>
   </section>
 
+  <section id="voices" hidden>
+    <div class="bar">
+      <button class="back" id="vback" aria-label="חזרה">→</button>
+      <h2>הקלטת מילים</h2>
+    </div>
+    <p class="note">לחצו על מילה כדי להקליט אותה בקול שלכם. מילה בלי הקלטה נשמעת בקול המחשב. ההקלטות נשמרות רק במכשיר הזה.</p>
+    <div class="tray list cols" id="vlist"></div>
+  </section>
+
   <section id="game" hidden>
     <div class="bar">
       <button class="back" id="back" aria-label="חזרה לשלבים">→</button>
       <div class="track"><b id="prog"></b></div>
+      <button class="back" id="mic" aria-label="להקליט את המילה" hidden>🎙️</button>
     </div>
     <div class="stage">
       <button class="say" id="say" aria-label="להשמיע את המילה">
@@ -222,12 +240,27 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
   </section>
 </div>
 
+<div class="sheet" id="sheet" dir="rtl" lang="he" hidden>
+  <div class="card">
+    <p class="model" id="sword"></p>
+    <p class="note" id="sstate"></p>
+    <button class="btn main" id="srec"></button>
+    <div class="row">
+      <button class="btn" id="splay">▶ ההקלטה</button>
+      <button class="btn" id="stts">🤖 קול המחשב</button>
+    </div>
+    <button class="link" id="sdel">למחוק את ההקלטה</button>
+    <button class="btn" id="sclose">סגירה</button>
+  </div>
+</div>
+
 <script>
-/* The dictation catalog, newest first. Paste the teacher's words as written; parse() splits them into letter + nikud */
+/* The dictation catalog, newest first. Paste the teacher's words as written; parse() splits them into letter + nikud.
+   An optional third field is what the device voice reads instead, for words it stresses wrong (or record them in the app) */
 const DICTATIONS = [
   { id: '2026-10-23', title: 'יום שישי, 23.10', when: 'ביום שישי', words: [
     ['בַּר', '🦁'], ['בַּלָּם', '🛑'], ['רָם', '📢'], ['רָשַׁם', '✏️'], ['שָׁם', '👉'],
-    ['בַּמְבָּה', '🥜'], ['בָּמָה', '🎭'], ['רָמָה', '⛰️'], ['לָשָׁה', '👩‍🍳'], ['לָשׁ', '🍞'] ] },
+    ['בַּמְבָּה', '🥜', 'במבה'], ['בָּמָה', '🎭'], ['רָמָה', '⛰️'], ['לָשָׁה', '👩‍🍳'], ['לָשׁ', '🍞'] ] },
   { id: 'shin-resh', title: 'ההכתבה הראשונה', when: '', words: [['שָׁר', '🎤'], ['רָשׁ', '🪙'], ['רַשְׁרַשׁ', '🍃']] },
 ];
 const FINALS = 'ךםןףץ', TWIN = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ', 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' };
@@ -235,6 +268,10 @@ const glyph = p => p[0] + p[1];
 const text = w => w.parts.map(glyph).join('');
 const rank = l => l.charCodeAt(0) + (FINALS.includes(l[0]) ? 1.5 : 0) + (l.includes('\u05BC') ? 0.1 : 0);
 const uniq = a => [...new Set(a)];
+const DAGESH = '\u05BC';
+/* the letter as heard: בּ כּ פּ keep their dagesh since it changes the sound; any other dagesh belongs with the nikud */
+const base = l => 'בכפ'.includes(l[0]) ? l : l.replace(DAGESH, '');
+const withDagesh = (l, on) => l[0] + (on ? DAGESH : '') + l.slice(1).replace(DAGESH, '');
 
 /* split a pointed word into [letter, nikud] parts, keeping every dagesh the teacher wrote */
 function parse(src) {
@@ -250,17 +287,19 @@ function parse(src) {
   return parts.map(p => [p.b + p.dg + p.dot, p.v]);
 }
 function load(d) {
-  const words = d.words.map(([say, pic]) => ({ say, pic, parts: parse(say) }));
+  const words = d.words.map(([say, pic, tts]) => ({ say, pic, tts, parts: parse(say) }));
   const parts = words.flatMap(w => w.parts);
   return { ...d, words,
     letters: uniq(parts.map(p => p[0])).sort((a, b) => rank(a) - rank(b)),
+    bases: uniq(parts.map(p => base(p[0]))).sort((a, b) => rank(a) - rank(b)),
+    dagesh: parts.some(p => base(p[0]) !== p[0]),
     nikud: uniq(parts.map(p => p[1]).filter(Boolean)).concat(''),
     pointed: uniq(parts.filter(p => p[1]).map(glyph)),
     sample: parts.find(p => p[1]) };
 }
 
 const LEVELS = [
-  { title: 'רק אותיות', ex: d => d.letters.slice(0, 3).join(' '), mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
+  { title: 'רק אותיות', ex: d => d.bases.slice(0, 3).join(' '), mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
   { title: 'אותיות עם ניקוד', ex: d => d.pointed.slice(0, 3).join(' '), mode: 'pointed', reps: 2, task: 'בחרי אות עם הניקוד הנכון' },
   { title: 'קודם אות, אחר כך ניקוד', ex: d => d.sample[0] + ' ← ' + glyph(d.sample), mode: 'split', reps: 1, task: '' },
   { title: 'בלי עזרה', ex: () => '? ? ?', mode: 'free', reps: 1, task: 'בני את כל המילה ולחצי בדיקה' },
@@ -307,6 +346,86 @@ function speak(t) {
     synth.speak(u);
   } catch (e) {}
 }
+/* a parent's recording of the word wins over the device voice; one shared player so iOS keeps it unlocked after the first tap */
+const player = new Audio(), voices = {};
+function say(w) {
+  if (synth) synth.cancel();
+  player.pause();
+  if (voices[w.say]) { player.src = voices[w.say]; player.play().catch(() => speak(w.tts || w.say)); }
+  else speak(w.tts || w.say);
+}
+const db = new Promise((ok, no) => {
+  const r = indexedDB.open('ori-dictation', 1);
+  r.onupgradeneeded = () => r.result.createObjectStore('voice');
+  r.onsuccess = () => ok(r.result); r.onerror = () => no(r.error);
+});
+db.catch(() => {});
+function loadVoices() {
+  return db.then(d => new Promise(ok => {
+    const s = d.transaction('voice').objectStore('voice'), keys = s.getAllKeys(), blobs = s.getAll();
+    blobs.onsuccess = () => { keys.result.forEach((k, i) => voices[k] = URL.createObjectURL(blobs.result[i])); ok(); };
+    blobs.onerror = () => ok();
+  })).catch(() => {});
+}
+function putVoice(key, blob) {
+  if (voices[key]) URL.revokeObjectURL(voices[key]);
+  if (blob) voices[key] = URL.createObjectURL(blob); else delete voices[key];
+  db.then(d => { const s = d.transaction('voice', 'readwrite').objectStore('voice'); if (blob) s.put(blob, key); else s.delete(key); }).catch(() => {});
+}
+
+/* the recording sheet: opened from the mic in a word's screen or from the parents' word list */
+const canRecord = !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+let sheetWord = null, rec = null, sheetDone = null;
+function openSheet(w, done) {
+  if (g) clearTimeout(g.timer);
+  if (synth) synth.cancel();
+  player.pause();
+  sheetWord = w; sheetDone = done;
+  $('sword').textContent = text(w);
+  $('sheet').hidden = false;
+  sheetState();
+}
+function sheetState(msg) {
+  const has = !!voices[sheetWord.say];
+  $('sstate').textContent = msg || (rec ? 'מקליטים… אמרו את המילה ולחצו סיום' : has ? 'נשמע בקול שלכם ✓' : 'עכשיו נשמע בקול המחשב');
+  $('srec').textContent = rec ? '⏹ סיום' : has ? '⏺ להקליט מחדש' : '⏺ להקליט';
+  $('srec').classList.toggle('rec', !!rec);
+  $('splay').hidden = !has || !!rec;
+  $('sdel').hidden = !has || !!rec;
+}
+async function toggleRec() {
+  if (rec) return rec.stop();
+  let stream;
+  try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
+  catch (e) { return sheetState('אין גישה למיקרופון. צריך לאשר אותה בדפדפן.'); }
+  if ($('sheet').hidden) { stream.getTracks().forEach(t => t.stop()); return; }
+  const w = sheetWord, chunks = [], r = new MediaRecorder(stream);
+  r.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+  r.onstop = () => {
+    clearTimeout(r.limit); stream.getTracks().forEach(t => t.stop()); rec = null;
+    if (chunks.length) putVoice(w.say, new Blob(chunks, { type: r.mimeType || chunks[0].type }));
+    if (sheetWord === w && !$('sheet').hidden) { sheetState(); if (chunks.length) say(w); }
+  };
+  rec = r; r.start();
+  r.limit = setTimeout(() => r.state === 'recording' && r.stop(), 5000);
+  sheetState();
+}
+function closeSheet() {
+  if (rec) rec.stop();
+  $('sheet').hidden = true;
+  if (sheetDone) sheetDone();
+}
+function renderVoices() {
+  $('vlist').innerHTML = '';
+  D.words.forEach(w => {
+    const b = document.createElement('button');
+    b.className = 'tile'; b.textContent = text(w) + (voices[w.say] ? '  🎙️' : '');
+    b.onclick = () => openSheet(w, renderVoices);
+    $('vlist').appendChild(b);
+  });
+  show('voices');
+}
+
 let ac;
 function tone(freqs) {
   try {
@@ -321,7 +440,7 @@ function tone(freqs) {
 }
 
 /* screens */
-function show(id) { ['home', 'catalog', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
+function show(id) { ['home', 'catalog', 'voices', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
 function unlocked(i) { return openAll || i === 0 || best[i - 1] > 0; }
 function renderHome() {
   $('dname').textContent = D.title;
@@ -338,6 +457,7 @@ function renderHome() {
   $('openall').checked = openAll;
   $('reset').hidden = !best.some(Boolean);
   $('novoice').hidden = !!synth;
+  $('recwords').hidden = !canRecord;
   show('home');
 }
 function renderCatalog() {
@@ -377,8 +497,9 @@ function nextQ() {
   $('pic').textContent = g.w.pic;
   $('model').hidden = true;
   $('slots').classList.remove('win');
+  $('mic').hidden = !canRecord;
   render();
-  speak(g.w.say);
+  say(g.w);
 }
 
 /* the right pointed letter, two of its other nikud, and one other letter with the same nikud — its look-alike when there is one (ל for לּ, מ for ם) */
@@ -409,7 +530,7 @@ function render() {
       s.textContent = g.done[i] ? glyph(p) : p[0];
       if (g.done[i]) s.classList.add('ok');
       else { s.onclick = () => { g.sel = i; g.slotMist = 0; render(); }; if (g.sel === i) s.classList.add('sel'); else if (g.sel === null) s.classList.add('next'); }
-    } else if (i < g.pos) s.textContent = phase === 'pointed' ? glyph(p) : p[0];
+    } else if (i < g.pos) s.textContent = phase === 'pointed' ? glyph(p) : base(p[0]);
     else if (i === g.pos) s.classList.add('next');
     slots.appendChild(s);
   });
@@ -418,7 +539,7 @@ function render() {
   tray.className = 'tray';
   if (phase === 'free') return renderFree();
   let opts, want;
-  if (phase === 'letters') { opts = D.letters; want = w.parts[g.pos][0]; tray.classList.add(opts.length <= 2 ? 'two' : opts.length > 8 ? 'five' : 'four'); }
+  if (phase === 'letters') { opts = D.bases; want = base(w.parts[g.pos][0]); tray.classList.add(opts.length <= 2 ? 'two' : opts.length > 8 ? 'five' : 'four'); }
   else if (phase === 'pointed') { opts = pointedChoices(w.parts[g.pos]); want = glyph(w.parts[g.pos]); }
   else if (g.sel === null) { tray.innerHTML = '<p>☝️</p>'; return; }
   else { const l = w.parts[g.sel][0]; opts = g.order.map(n => l + n); want = glyph(w.parts[g.sel]); }
@@ -434,17 +555,20 @@ function render() {
 /* build the whole word like on paper — a letter, then its nikud — with no slots and no feedback until she presses check */
 function renderFree() {
   const tray = $('tray'), want = g.w.parts, keys = {};
-  tray.classList.add(D.letters.length > 8 ? 'five' : 'four', 'keys');
+  tray.classList.add(D.bases.length > 8 ? 'five' : 'four', 'keys');
   const add = (parent, label, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = () => { if (!g.busy) fn(); }; parent.appendChild(b); return b; };
   const row = () => { const r = document.createElement('div'); r.className = 'row'; r.style.gridColumn = '1 / -1'; tray.appendChild(r); return r; };
   const changed = () => { g.marks = null; render(); };
-  D.letters.forEach(l => keys[l] = add(tray, l, 'tile', () => { if (g.built.length < want.length + 2) { g.built.push([l, '']); changed(); } }));
+  D.bases.forEach(l => keys[l] = add(tray, l, 'tile', () => { if (g.built.length < want.length + 2) { g.built.push([l, '']); changed(); } }));
   const marks = row();
   /* nikud keys show the last letter as it would look, so she sees בָ בַ בְ rather than bare marks */
   const last = g.built[g.built.length - 1];
   D.nikud.filter(Boolean).forEach(n => keys[n] = add(marks, (last ? last[0] : '◌') + n, 'tile mark', () => {
     if (last) { last[1] = last[1] === n ? '' : n; changed(); }
   }));
+  if (D.dagesh) keys[DAGESH] = add(marks, last ? withDagesh(last[0], true) + last[1] : '◌' + DAGESH, 'tile mark', () => {
+    if (last) { last[0] = withDagesh(last[0], !last[0].includes(DAGESH)); changed(); }
+  });
   const r = row();
   const del = add(r, 'מחיקה', 'btn', () => { g.built.pop(); changed(); });
   const check = add(r, 'בדיקה', 'btn main', () => {
@@ -463,12 +587,13 @@ function renderFree() {
     }
   });
   if (little) {
-    /* a last letter still waiting for its nikud is on track, not wrong */
-    const n = g.built.length;
-    const bad = g.built.findIndex((p, i) => !want[i] || p[0] !== want[i][0] || (p[1] !== want[i][1] && (i < n - 1 || p[1])));
-    const hint = bad >= 0 ? (bad === n - 1 && want[bad] && last[0] === want[bad][0] ? keys[want[bad][1] || last[1]] : del)
-      : last && last[1] !== want[n - 1][1] ? keys[want[n - 1][1]]
-      : n < want.length ? keys[want[n][0]] : check;
+    /* the last letter may still be waiting for its dagesh or nikud; everything before it must already be right */
+    const n = g.built.length, bare = l => l.replace(DAGESH, '');
+    const bad = g.built.some((p, i) => !want[i] || (i < n - 1 ? glyph(p) !== glyph(want[i]) : bare(p[0]) !== bare(want[i][0])));
+    const hint = bad ? del
+      : last && last[0] !== want[n - 1][0] ? keys[DAGESH]
+      : last && last[1] !== want[n - 1][1] ? keys[want[n - 1][1] || last[1]]
+      : n < want.length ? keys[base(want[n][0])] : check;
     hint.classList.add('hint');
   }
 }
@@ -505,7 +630,7 @@ function win() {
   $('tray').innerHTML = '';
   $('task').textContent = PRAISE[Math.random() * PRAISE.length | 0];
   tone([660, 880, 1100]);
-  setTimeout(() => speak(g.w.say), 350);
+  setTimeout(() => say(g.w), 350);
   if (g.mistakes === 0) { if (!g.item.retry) g.clean++; }
   else if (!g.item.retry) g.queue.push({ w: g.w, retry: true });
   setTimeout(nextQ, 1700);
@@ -516,6 +641,7 @@ function startDictation() {
   const words = shuffle(D.words), tray = $('tray'), me = g;
   let k = -1;
   g.w = null; g.total = words.length;
+  $('mic').hidden = true;
   $('slots').hidden = true; $('model').hidden = true; $('pic').textContent = '';
   tray.className = 'tray';
   const row = () => { tray.innerHTML = ''; const r = document.createElement('div'); r.className = 'row'; r.style.gridColumn = '1 / -1'; tray.appendChild(r); return r; };
@@ -527,13 +653,14 @@ function startDictation() {
     g.w = words[k];
     $('task').textContent = 'מילה ' + (k + 1) + ' מתוך ' + words.length + ': כתבי על הדף';
     $('model').textContent = text(g.w); $('model').hidden = !little;
-    speak(g.w.say);
+    $('mic').hidden = !canRecord;
+    say(g.w);
     const cur = k;
-    g.timer = setTimeout(() => { if (g === me && k === cur && !$('game').hidden) speak(words[cur].say); }, 3500);
+    g.timer = setTimeout(() => { if (g === me && k === cur && !$('game').hidden && $('sheet').hidden) say(words[cur]); }, 3500);
     btn(row(), 'כתבתי', next);
   };
   const reveal = () => {
-    g.w = null; $('model').hidden = true;
+    g.w = null; $('model').hidden = true; $('mic').hidden = true;
     $('task').textContent = 'בודקים! לחצי על כל מילה שיצאה נכון';
     tray.innerHTML = '';
     tray.className = 'tray list' + (words.length > 4 ? ' cols' : '');
@@ -566,8 +693,16 @@ function finish() {
   show('done');
 }
 
-$('say').onclick = () => { if (g && g.w) speak(g.w.say); };
-$('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cancel(); renderHome(); };
+$('say').onclick = () => { if (g && g.w) say(g.w); };
+$('mic').onclick = () => { if (g && g.w) openSheet(g.w); };
+$('srec').onclick = toggleRec;
+$('splay').onclick = () => say(sheetWord);
+$('stts').onclick = () => { player.pause(); speak(sheetWord.tts || sheetWord.say); };
+$('sdel').onclick = () => { putVoice(sheetWord.say, null); sheetState(); };
+$('sclose').onclick = closeSheet;
+$('recwords').onclick = renderVoices;
+$('vback').onclick = renderHome;
+$('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cancel(); player.pause(); renderHome(); };
 $('again').onclick = () => startLevel(g.lvl);
 $('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
 $('pick').onclick = renderCatalog;
@@ -580,6 +715,7 @@ document.addEventListener('gesturestart', e => e.preventDefault());
 if (synth) synth.getVoices();
 choose(cur);
 renderHome();
+loadVoices();
 </script>
 </body>
 </html>
