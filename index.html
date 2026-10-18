@@ -51,7 +51,7 @@ body {
   overflow-x: hidden;
 }
 #app {
-  height: 100%; max-width: 520px; margin: 0 auto;
+  height: 100%; max-width: 520px; margin: 0 auto; box-sizing: border-box;
   padding-inline: 16px; padding-block: 12px;
   border-inline-start: 2px solid var(--margin);
   display: flex; flex-direction: column;
@@ -62,11 +62,11 @@ button:focus-visible { outline: 3px solid var(--sticker); outline-offset: 2px; }
 h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text-wrap: balance; }
 
 /* home */
-.levels { display: flex; flex-direction: column; gap: 12px; }
+.levels { display: flex; flex-direction: column; gap: 10px; }
 .level {
   display: flex; align-items: center; gap: 14px; text-align: start;
   background: var(--tile); border: 2px solid var(--tile-edge); border-bottom-width: 6px;
-  border-radius: 18px; padding: 12px 16px;
+  border-radius: 18px; padding: 8px 16px;
 }
 .level[disabled] { opacity: .45; cursor: default; }
 .level .num {
@@ -76,6 +76,15 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 }
 .level .txt { flex: 1; min-width: 0; font-weight: 600; font-size: 20px; color: var(--ink); }
 .level .ex { display: block; font-family: var(--letters); font-weight: 400; font-size: 26px; color: var(--pencil); line-height: 1.45; }
+.level.cur { border-color: var(--ink); }
+.pick {
+  display: flex; align-items: center; gap: 12px; text-align: start;
+  background: var(--tile); border: 2px dashed var(--margin); border-radius: 16px; padding: 8px 14px;
+}
+.pick .txt { flex: 1; min-width: 0; font-weight: 600; font-size: 18px; color: var(--ink); }
+.pick .ex, #dicts .ex { font-family: var(--letters); font-weight: 400; font-size: 22px; color: var(--pencil); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 1.5; }
+.pick .more { flex: none; font-size: 15px; text-decoration: underline; }
+.bar h2 { margin: 0; font-size: 26px; font-weight: 600; color: var(--ink); }
 .stars { flex: none; color: var(--sticker); font-size: 22px; letter-spacing: 2px; }
 .stars i { font-style: normal; opacity: .25; }
 .parent { margin-top: auto; font-size: 15px; display: flex; flex-direction: column; gap: 6px; align-items: flex-start; }
@@ -101,9 +110,9 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .say .pic { position: absolute; inset-inline-end: -14px; bottom: -10px; font-size: 44px; }
 .say:active { transform: translateY(4px); box-shadow: 0 2px 0 var(--tile-edge); }
 .task { margin: 0; font-size: 20px; font-weight: 600; color: var(--ink); min-height: 1.4em; text-align: center; }
-.slots { display: flex; gap: 8px; justify-content: center; min-height: 104px; }
+.slots { display: flex; gap: 8px; justify-content: center; min-height: 104px; align-self: stretch; }
 .slot {
-  width: min(19vw, 84px); height: 104px;
+  flex: 0 1 84px; min-width: 0; height: 104px;
   border-bottom: 5px solid var(--pencil); border-radius: 10px 10px 0 0;
   font-family: var(--letters); font-weight: 400; font-size: 60px; line-height: 84px;
   text-align: center; color: var(--pencil); padding: 0;
@@ -124,6 +133,15 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
   height: 92px; padding: 0 0 10px;
 }
 .tray.two .tile { font-size: 68px; height: 120px; }
+.tray.five { grid-template-columns: repeat(5, 1fr); }
+/* free building: letter keys, a nikud row, then delete/check */
+.tray.keys { gap: 8px; }
+.tray.keys .tile { font-size: 44px; height: 68px; }
+.tray.keys .tile.mark { width: 76px; }
+/* dictation check: every word on one screen */
+.tray.list { grid-template-columns: 1fr; gap: 8px; }
+.tray.list.cols { grid-template-columns: repeat(2, 1fr); }
+.tray.list .tile { font-size: 34px; height: 60px; padding: 0 8px 6px; text-align: start; white-space: nowrap; }
 .tile:active { transform: translateY(3px); border-bottom-width: 3px; }
 .tile.no { animation: shake .35s; border-color: var(--bad); }
 .tile.hint, .btn.hint { border-color: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 35%, transparent); }
@@ -157,6 +175,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 <div id="app" dir="rtl" lang="he">
   <section id="home">
     <h1>ההכתבה של אורי</h1>
+    <button class="pick" id="pick"><span class="txt"><span id="dname"></span><span class="ex" id="dwords"></span></span><span class="more">הכתבות אחרות</span></button>
     <div class="levels" id="levels"></div>
     <div class="parent">
       <span id="novoice" hidden>במכשיר הזה אין הקראה בעברית. אמרו לה את המילה לפי הציור.</span>
@@ -165,6 +184,14 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
       <label class="toggle"><input type="checkbox" id="openall"><span>כל השלבים פתוחים</span></label>
       <button class="link" id="reset">לאפס את הכוכבים</button>
     </div>
+  </section>
+
+  <section id="catalog" hidden>
+    <div class="bar">
+      <button class="back" id="catback" aria-label="חזרה">→</button>
+      <h2>איזו הכתבה?</h2>
+    </div>
+    <div class="levels" id="dicts"></div>
   </section>
 
   <section id="game" hidden>
@@ -196,36 +223,76 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 </div>
 
 <script>
-const SH = 'שׁ', R = 'ר', K = 'ָ', P = 'ַ', S = 'ְ';
-const NIKUD = [K, P, S, ''];
-const WORDS = [
-  { parts: [[SH, K], [R, '']], pic: '🎤' },
-  { parts: [[R, K], [SH, '']], pic: '🪙' },
-  { parts: [[R, P], [SH, S], [R, P], [SH, '']], pic: '🍃' },
+/* The dictation catalog, newest first. Paste the teacher's words as written; parse() splits them into letter + nikud */
+const DICTATIONS = [
+  { id: '2026-10-23', title: 'יום שישי, 23.10', when: 'ביום שישי', words: [
+    ['בַּר', '🦁'], ['בַּלָּם', '🛑'], ['רָם', '📢'], ['רָשַׁם', '✏️'], ['שָׁם', '👉'],
+    ['בַּמְבָּה', '🥜'], ['בָּמָה', '🎭'], ['רָמָה', '⛰️'], ['לָשָׁה', '👩‍🍳'], ['לָשׁ', '🍞'] ] },
+  { id: 'shin-resh', title: 'ההכתבה הראשונה', when: '', words: [['שָׁר', '🎤'], ['רָשׁ', '🪙'], ['רַשְׁרַשׁ', '🍃']] },
 ];
+const FINALS = 'ךםןףץ', TWIN = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ', 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' };
 const glyph = p => p[0] + p[1];
 const text = w => w.parts.map(glyph).join('');
+const rank = l => l.charCodeAt(0) + (FINALS.includes(l[0]) ? 1.5 : 0) + (l.includes('\u05BC') ? 0.1 : 0);
+const uniq = a => [...new Set(a)];
+
+/* split a pointed word into [letter, nikud] parts, keeping every dagesh the teacher wrote */
+function parse(src) {
+  const parts = [];
+  for (const c of src) {
+    const p = parts[parts.length - 1];
+    if (c >= 'א' && c <= 'ת') parts.push({ b: c, dg: '', dot: '', v: '' });
+    else if (!p) continue;
+    else if (c === 'ּ') p.dg = c;
+    else if (c === 'ׁ' || c === 'ׂ') p.dot = c;
+    else p.v += c;
+  }
+  return parts.map(p => [p.b + p.dg + p.dot, p.v]);
+}
+function load(d) {
+  const words = d.words.map(([say, pic]) => ({ say, pic, parts: parse(say) }));
+  const parts = words.flatMap(w => w.parts);
+  return { ...d, words,
+    letters: uniq(parts.map(p => p[0])).sort((a, b) => rank(a) - rank(b)),
+    nikud: uniq(parts.map(p => p[1]).filter(Boolean)).concat(''),
+    pointed: uniq(parts.filter(p => p[1]).map(glyph)),
+    sample: parts.find(p => p[1]) };
+}
+
 const LEVELS = [
-  { title: 'רק אותיות', ex: SH + ' ' + R, mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
-  { title: 'אותיות עם ניקוד', ex: SH + K + ' ' + R + P + ' ' + SH + S, mode: 'pointed', reps: 2, task: 'בחרי אות עם הניקוד הנכון' },
-  { title: 'קודם אות, אחר כך ניקוד', ex: R + ' ← ' + R + P, mode: 'split', reps: 1, task: '' },
-  { title: 'בלי עזרה', ex: '? ? ?', mode: 'free', reps: 1, task: 'בני את כל המילה ולחצי בדיקה' },
-  { title: 'הכתבה אמיתית', ex: 'במחברת, בעיפרון', mode: 'dictation', reps: 1, task: '' },
+  { title: 'רק אותיות', ex: d => d.letters.slice(0, 3).join(' '), mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
+  { title: 'אותיות עם ניקוד', ex: d => d.pointed.slice(0, 3).join(' '), mode: 'pointed', reps: 2, task: 'בחרי אות עם הניקוד הנכון' },
+  { title: 'קודם אות, אחר כך ניקוד', ex: d => d.sample[0] + ' ← ' + glyph(d.sample), mode: 'split', reps: 1, task: '' },
+  { title: 'בלי עזרה', ex: () => '? ? ?', mode: 'free', reps: 1, task: 'בני את כל המילה ולחצי בדיקה' },
+  { title: 'הכתבה אמיתית', ex: () => 'על דף, בעיפרון', mode: 'dictation', reps: 1, task: '' },
 ];
 const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאוד!', 'אלופה!'];
-const KEY = 'ori-dictation-v3', OLD_KEY = 'ori-dictation-v2';
+const KEY = 'ori-dictation-v4';
 const $ = id => document.getElementById(id);
 
-/* little: younger siblings' mode — the right answer is highlighted and Ori's stars stay untouched */
-let best = LEVELS.map(() => 0), openAll = false, little = false, g = null;
+/* prog: stars per dictation id. little: younger siblings' mode — the right answer is highlighted and Ori's stars stay untouched */
+let prog = {}, cur = DICTATIONS[0].id, openAll = false, little = false, g = null, D, best;
 try {
   let s = JSON.parse(localStorage.getItem(KEY));
-  /* v2 had a finger-writing level at index 4; drop its stars so dictation keeps its own */
-  if (!s) { s = JSON.parse(localStorage.getItem(OLD_KEY)); if (s && s.best) s.best.splice(4, 1); }
-  if (s && s.best) { best = LEVELS.map((_, i) => s.best[i] || 0); openAll = !!s.openAll; little = !!s.little; } } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ best, openAll, little })); } catch (e) {} };
+  if (!s) {
+    /* v2/v3 kept one best[] for the first dictation; v2 also had a finger-writing level at index 4 */
+    let o = JSON.parse(localStorage.getItem('ori-dictation-v3'));
+    if (!o) { o = JSON.parse(localStorage.getItem('ori-dictation-v2')); if (o && o.best) o.best.splice(4, 1); }
+    if (o && o.best) s = { prog: { 'shin-resh': o.best }, openAll: o.openAll, little: o.little };
+  }
+  if (s) {
+    prog = s.prog || {}; openAll = !!s.openAll; little = !!s.little;
+    /* a newly added dictation opens by itself the first time */
+    if (s.newest === DICTATIONS[0].id && DICTATIONS.some(d => d.id === s.cur)) cur = s.cur;
+  } } catch (e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ prog, cur, newest: DICTATIONS[0].id, openAll, little })); } catch (e) {} };
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const stars = n => '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i>';
+function choose(id) {
+  cur = id; D = load(DICTATIONS.find(d => d.id === id));
+  best = prog[id] = LEVELS.map((_, i) => (prog[id] || [])[i] || 0);
+}
+const preview = d => d.words.slice(0, 4).map(text).join(' · ') + (d.words.length > 4 ? ' …' : '');
 
 /* sound */
 const synth = window.speechSynthesis;
@@ -254,14 +321,16 @@ function tone(freqs) {
 }
 
 /* screens */
-function show(id) { ['home', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
+function show(id) { ['home', 'catalog', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
 function unlocked(i) { return openAll || i === 0 || best[i - 1] > 0; }
 function renderHome() {
+  $('dname').textContent = D.title;
+  $('dwords').textContent = preview(D);
   $('levels').innerHTML = '';
   LEVELS.forEach((L, i) => {
     const b = document.createElement('button');
     b.className = 'level'; b.disabled = !unlocked(i);
-    b.innerHTML = `<span class="num">${i + 1}</span><span class="txt">${L.title}<span class="ex">${L.ex}</span></span><span class="stars">${stars(best[i])}</span>`;
+    b.innerHTML = `<span class="num">${i + 1}</span><span class="txt">${L.title}<span class="ex">${L.ex(D)}</span></span><span class="stars">${stars(best[i])}</span>`;
     b.onclick = () => startLevel(i);
     $('levels').appendChild(b);
   });
@@ -271,12 +340,24 @@ function renderHome() {
   $('novoice').hidden = !!synth;
   show('home');
 }
+function renderCatalog() {
+  $('dicts').innerHTML = '';
+  DICTATIONS.forEach(d => {
+    const b = document.createElement('button'), got = (prog[d.id] || []).reduce((a, n) => a + n, 0);
+    b.className = 'level' + (d.id === cur ? ' cur' : '');
+    b.innerHTML = `<span class="txt">${d.title}<span class="ex">${preview(load(d))}</span></span><span class="stars">${got}/${LEVELS.length * 3} ★</span>`;
+    b.onclick = () => { choose(d.id); save(); renderHome(); };
+    $('dicts').appendChild(b);
+  });
+  show('catalog');
+}
 
 function startLevel(i) {
-  const L = LEVELS[i];
+  /* a long list gets one pass so a round stays a few minutes */
+  const L = LEVELS[i], reps = D.words.length > 5 ? 1 : L.reps;
   let queue = [];
-  for (let r = 0; r < L.reps; r++) {
-    let block = shuffle(WORDS);
+  for (let r = 0; r < reps; r++) {
+    let block = shuffle(D.words);
     if (queue.length && queue[queue.length - 1].w === block[0]) block.push(block.shift());
     queue = queue.concat(block.map(w => ({ w, retry: false })));
   }
@@ -290,14 +371,23 @@ function nextQ() {
   g.qi++;
   if (g.qi >= g.queue.length) return finish();
   const item = g.queue[g.qi];
-  Object.assign(g, { item, w: item.w, order: shuffle(NIKUD), pos: 0, mistakes: 0, slotMist: 0, sel: null, busy: false, built: [], marks: null, fails: 0,
+  Object.assign(g, { item, w: item.w, order: shuffle(D.nikud), pos: 0, mistakes: 0, slotMist: 0, sel: null, busy: false, built: [], marks: null, fails: 0,
     phase: g.L.mode === 'split' ? 'letters' : g.L.mode, done: item.w.parts.map(() => false) });
   $('prog').style.width = (g.qi / g.queue.length * 100) + '%';
   $('pic').textContent = g.w.pic;
   $('model').hidden = true;
   $('slots').classList.remove('win');
   render();
-  speak(text(g.w));
+  speak(g.w.say);
+}
+
+/* the right pointed letter, two of its other nikud, and one other letter with the same nikud — its look-alike when there is one (ל for לּ, מ for ם) */
+function pointedChoices(p) {
+  const want = glyph(p), rest = shuffle(D.letters.filter(l => l !== p[0]));
+  const other = rest.find(l => l[0] === p[0][0] || l[0] === TWIN[p[0][0]]) || rest[0];
+  const opts = [want, ...shuffle(D.nikud.map(n => p[0] + n).filter(o => o !== want)).slice(0, other ? 2 : 3)];
+  if (other) opts.push(other + p[1]);
+  return shuffle(opts);
 }
 
 function render() {
@@ -307,10 +397,10 @@ function render() {
     : phase === 'nikud' ? (g.sel === null ? 'לחצי על אות כדי לנקד אותה' : 'איזה ניקוד מתאים?') : g.L.task;
 
   slots.innerHTML = '';
-  if (phase === 'free') g.built.forEach((t, i) => {
+  if (phase === 'free') g.built.forEach((p, i) => {
     const s = document.createElement('div');
     s.className = 'slot' + (g.marks ? (g.marks[i] ? ' ok' : ' bad') : '');
-    s.textContent = t; slots.appendChild(s);
+    s.textContent = glyph(p); slots.appendChild(s);
   });
   else w.parts.forEach((p, i) => {
     const s = document.createElement(phase === 'nikud' ? 'button' : 'div');
@@ -328,8 +418,8 @@ function render() {
   tray.className = 'tray';
   if (phase === 'free') return renderFree();
   let opts, want;
-  if (phase === 'letters') { opts = [SH, R]; want = w.parts[g.pos][0]; tray.classList.add('two'); }
-  else if (phase === 'pointed') { opts = [SH, R].flatMap(l => g.order.map(n => l + n)); want = glyph(w.parts[g.pos]); }
+  if (phase === 'letters') { opts = D.letters; want = w.parts[g.pos][0]; tray.classList.add(opts.length <= 2 ? 'two' : opts.length > 8 ? 'five' : 'four'); }
+  else if (phase === 'pointed') { opts = pointedChoices(w.parts[g.pos]); want = glyph(w.parts[g.pos]); }
   else if (g.sel === null) { tray.innerHTML = '<p>☝️</p>'; return; }
   else { const l = w.parts[g.sel][0]; opts = g.order.map(n => l + n); want = glyph(w.parts[g.sel]); }
   opts.forEach(o => {
@@ -341,25 +431,29 @@ function render() {
   });
 }
 
-/* build the whole word with no slots and no feedback until she presses check */
+/* build the whole word like on paper — a letter, then its nikud — with no slots and no feedback until she presses check */
 function renderFree() {
-  const tray = $('tray');
-  [SH, R].flatMap(l => g.order.map(n => l + n)).forEach(o => {
-    const b = document.createElement('button');
-    b.className = 'tile'; b.textContent = o;
-    b.onclick = () => { if (g.busy || g.built.length >= 5) return; g.built.push(o); g.marks = null; render(); };
-    tray.appendChild(b);
-  });
-  const row = document.createElement('div'); row.className = 'row'; row.style.gridColumn = '1 / -1';
-  const btn = (label, main, fn) => { const b = document.createElement('button'); b.className = 'btn' + (main ? ' main' : ''); b.textContent = label; b.onclick = fn; row.appendChild(b); return b; };
-  const del = btn('מחיקה', false, () => { if (g.busy) return; g.built.pop(); g.marks = null; render(); });
-  const check = btn('בדיקה', true, () => {
-    if (g.busy || !g.built.length) return;
-    const want = g.w.parts.map(glyph);
-    if (g.built.length === want.length && g.built.every((t, i) => t === want[i])) return win();
+  const tray = $('tray'), want = g.w.parts, keys = {};
+  tray.classList.add(D.letters.length > 8 ? 'five' : 'four', 'keys');
+  const add = (parent, label, cls, fn) => { const b = document.createElement('button'); b.className = cls; b.textContent = label; b.onclick = () => { if (!g.busy) fn(); }; parent.appendChild(b); return b; };
+  const row = () => { const r = document.createElement('div'); r.className = 'row'; r.style.gridColumn = '1 / -1'; tray.appendChild(r); return r; };
+  const changed = () => { g.marks = null; render(); };
+  D.letters.forEach(l => keys[l] = add(tray, l, 'tile', () => { if (g.built.length < want.length + 2) { g.built.push([l, '']); changed(); } }));
+  const marks = row();
+  /* nikud keys show the last letter as it would look, so she sees בָ בַ בְ rather than bare marks */
+  const last = g.built[g.built.length - 1];
+  D.nikud.filter(Boolean).forEach(n => keys[n] = add(marks, (last ? last[0] : '◌') + n, 'tile mark', () => {
+    if (last) { last[1] = last[1] === n ? '' : n; changed(); }
+  }));
+  const r = row();
+  const del = add(r, 'מחיקה', 'btn', () => { g.built.pop(); changed(); });
+  const check = add(r, 'בדיקה', 'btn main', () => {
+    if (!g.built.length) return;
+    const ok = g.built.map((p, i) => !!want[i] && glyph(p) === glyph(want[i]));
+    if (g.built.length === want.length && ok.every(Boolean)) return win();
     g.mistakes++; g.fails++;
     tone([180]);
-    g.marks = g.built.map((t, i) => t === want[i]);
+    g.marks = ok;
     render();
     $('task').textContent = 'כמעט. מה צריך לתקן?';
     if (g.fails >= 2) {
@@ -368,13 +462,14 @@ function renderFree() {
       setTimeout(() => { if (g.qi === q && g.phase === 'free') $('model').hidden = true; }, 2500);
     }
   });
-  tray.appendChild(row);
   if (little) {
-    const want = g.w.parts.map(glyph), k = g.built.length;
-    const onTrack = g.built.every((t, i) => t === want[i]);
-    if (!onTrack) del.classList.add('hint');
-    else if (k >= want.length) check.classList.add('hint');
-    else [...tray.children].forEach(b => { if (b.textContent === want[k]) b.classList.add('hint'); });
+    /* a last letter still waiting for its nikud is on track, not wrong */
+    const n = g.built.length;
+    const bad = g.built.findIndex((p, i) => !want[i] || p[0] !== want[i][0] || (p[1] !== want[i][1] && (i < n - 1 || p[1])));
+    const hint = bad >= 0 ? (bad === n - 1 && want[bad] && last[0] === want[bad][0] ? keys[want[bad][1] || last[1]] : del)
+      : last && last[1] !== want[n - 1][1] ? keys[want[n - 1][1]]
+      : n < want.length ? keys[want[n][0]] : check;
+    hint.classList.add('hint');
   }
 }
 
@@ -410,15 +505,15 @@ function win() {
   $('tray').innerHTML = '';
   $('task').textContent = PRAISE[Math.random() * PRAISE.length | 0];
   tone([660, 880, 1100]);
-  setTimeout(() => speak(text(g.w)), 350);
+  setTimeout(() => speak(g.w.say), 350);
   if (g.mistakes === 0) { if (!g.item.retry) g.clean++; }
   else if (!g.item.retry) g.queue.push({ w: g.w, retry: true });
   setTimeout(nextQ, 1700);
 }
 
-/* last level: like in class — three words in a row into the notebook, checked only at the end */
+/* last level: like in class — all the words in a row onto a separate page, checked only at the end */
 function startDictation() {
-  const words = shuffle(WORDS), tray = $('tray'), me = g;
+  const words = shuffle(D.words), tray = $('tray'), me = g;
   let k = -1;
   g.w = null; g.total = words.length;
   $('slots').hidden = true; $('model').hidden = true; $('pic').textContent = '';
@@ -430,21 +525,22 @@ function startDictation() {
     $('prog').style.width = (Math.min(k, words.length) / words.length * 100) + '%';
     if (k >= words.length) return reveal();
     g.w = words[k];
-    $('task').textContent = 'מילה ' + (k + 1) + ': כתבי במחברת';
+    $('task').textContent = 'מילה ' + (k + 1) + ' מתוך ' + words.length + ': כתבי על הדף';
     $('model').textContent = text(g.w); $('model').hidden = !little;
-    speak(text(g.w));
+    speak(g.w.say);
     const cur = k;
-    g.timer = setTimeout(() => { if (g === me && k === cur && !$('game').hidden) speak(text(words[cur])); }, 3500);
+    g.timer = setTimeout(() => { if (g === me && k === cur && !$('game').hidden) speak(words[cur].say); }, 3500);
     btn(row(), 'כתבתי', next);
   };
   const reveal = () => {
     g.w = null; $('model').hidden = true;
     $('task').textContent = 'בודקים! לחצי על כל מילה שיצאה נכון';
     tray.innerHTML = '';
+    tray.className = 'tray list' + (words.length > 4 ? ' cols' : '');
     const ok = words.map(() => false);
     words.forEach((w, i) => {
       const b = document.createElement('button');
-      b.className = 'tile'; b.style.gridColumn = '1 / -1';
+      b.className = 'tile';
       const label = () => { b.textContent = (i + 1) + '.  ' + text(w) + (ok[i] ? '  ✓' : ''); b.classList.toggle('hint', ok[i]); };
       b.onclick = () => { ok[i] = !ok[i]; label(); };
       label(); tray.appendChild(b);
@@ -453,7 +549,7 @@ function startDictation() {
     btn(r, 'סיימתי', () => { g.clean = ok.filter(Boolean).length; finish(); });
   };
   $('prog').style.width = '0%';
-  $('task').textContent = 'מחברת ועיפרון מוכנים?';
+  $('task').textContent = 'דף ועיפרון מוכנים?';
   btn(row(), 'מתחילים', next);
 }
 
@@ -463,22 +559,26 @@ function finish() {
   const last = g.lvl === LEVELS.length - 1;
   $('bigstars').innerHTML = stars(n);
   $('donetitle').textContent = last ? 'סיימת את כל השלבים!' : 'סיימת את שלב ' + (g.lvl + 1) + '!';
+  $('mission').textContent = (D.when ? D.when + ' ' : '') + 'בכיתה עושים בדיוק אותו דבר. בהצלחה!';
   $('mission').hidden = !last;
   $('onward').textContent = last ? 'לכל השלבים' : 'לשלב הבא';
   tone([523, 659, 784, 1047]);
   show('done');
 }
 
-$('say').onclick = () => { if (g && g.w) speak(text(g.w)); };
+$('say').onclick = () => { if (g && g.w) speak(g.w.say); };
 $('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cancel(); renderHome(); };
 $('again').onclick = () => startLevel(g.lvl);
 $('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
+$('pick').onclick = renderCatalog;
+$('catback').onclick = renderHome;
 $('little').onchange = e => { little = e.target.checked; save(); renderHome(); };
 $('openall').onchange = e => { openAll = e.target.checked; save(); renderHome(); };
-$('reset').onclick = () => { if (!confirm('לאפס את כל הכוכבים ולהתחיל משלב 1?')) return; best = LEVELS.map(() => 0); save(); renderHome(); };
+$('reset').onclick = () => { if (!confirm('לאפס את הכוכבים של ההכתבה הזאת ולהתחיל משלב 1?')) return; best.fill(0); save(); renderHome(); };
 /* no pinch zoom: iOS Safari ignores user-scalable=no */
 document.addEventListener('gesturestart', e => e.preventDefault());
 if (synth) synth.getVoices();
+choose(cur);
 renderHome();
 </script>
 </body>
