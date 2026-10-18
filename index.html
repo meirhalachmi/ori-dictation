@@ -233,17 +233,17 @@ const DICTATIONS = [
 const FINALS = 'ךםןףץ', TWIN = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ', 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' };
 const glyph = p => p[0] + p[1];
 const text = w => w.parts.map(glyph).join('');
-const rank = l => l.charCodeAt(0) + (FINALS.includes(l[0]) ? 1.5 : 0);
+const rank = l => l.charCodeAt(0) + (FINALS.includes(l[0]) ? 1.5 : 0) + (l.includes('\u05BC') ? 0.1 : 0);
 const uniq = a => [...new Set(a)];
 
-/* split a pointed word into [letter, nikud] parts; dagesh stays only on בּ כּ פּ, where it changes the sound — first graders don't write dagesh chazak */
+/* split a pointed word into [letter, nikud] parts, keeping every dagesh the teacher wrote */
 function parse(src) {
   const parts = [];
   for (const c of src) {
     const p = parts[parts.length - 1];
     if (c >= 'א' && c <= 'ת') parts.push({ b: c, dg: '', dot: '', v: '' });
     else if (!p) continue;
-    else if (c === 'ּ') p.dg = 'בכפ'.includes(p.b) ? c : '';
+    else if (c === 'ּ') p.dg = c;
     else if (c === 'ׁ' || c === 'ׂ') p.dot = c;
     else p.v += c;
   }
@@ -381,9 +381,10 @@ function nextQ() {
   speak(g.w.say);
 }
 
-/* the right pointed letter, two of its other nikud, and one other letter with the same nikud (מ for ם and back) */
+/* the right pointed letter, two of its other nikud, and one other letter with the same nikud — its look-alike when there is one (ל for לּ, מ for ם) */
 function pointedChoices(p) {
-  const want = glyph(p), other = D.letters.includes(TWIN[p[0]]) ? TWIN[p[0]] : shuffle(D.letters.filter(l => l !== p[0]))[0];
+  const want = glyph(p), rest = shuffle(D.letters.filter(l => l !== p[0]));
+  const other = rest.find(l => l[0] === p[0][0] || l[0] === TWIN[p[0][0]]) || rest[0];
   const opts = [want, ...shuffle(D.nikud.map(n => p[0] + n).filter(o => o !== want)).slice(0, other ? 2 : 3)];
   if (other) opts.push(other + p[1]);
   return shuffle(opts);
