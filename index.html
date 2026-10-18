@@ -166,7 +166,8 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .sheet .card { width: min(100%, 420px); box-sizing: border-box; background: var(--paper); border-radius: 20px; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 12px; text-align: center; }
 .sheet .model { color: var(--ink); line-height: 1.3; }
 .note { margin: 0; font-size: 16px; }
-.btn.rec { background: var(--bad); border-color: var(--bad); animation: pulse 1s infinite; }
+.sheet #srec { align-self: stretch; padding: 20px; font-size: 22px; touch-action: none; -webkit-touch-callout: none; }
+.btn.rec { background: var(--bad); border-color: var(--bad); transform: scale(1.04); animation: pulse 1s infinite; }
 @keyframes pulse { 50% { opacity: .7; } }
 @keyframes shake { 25% { transform: translateX(7px); } 50% { transform: translateX(-7px); } 75% { transform: translateX(4px); } }
 @keyframes hop { 0% { transform: translateY(0); } 40% { transform: translateY(-16px); } 100% { transform: translateY(0); } }
@@ -245,6 +246,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
     <p class="model" id="sword"></p>
     <p class="note" id="sstate"></p>
     <button class="btn main" id="srec"></button>
+    <label id="haptic" hidden><input type="checkbox" switch></label>
     <div class="row">
       <button class="btn" id="splay">▶ ההקלטה</button>
       <button class="btn" id="stts">🤖 קול המחשב</button>
@@ -384,34 +386,94 @@ function openSheet(w, done) {
   $('sword').textContent = text(w);
   $('sheet').hidden = false;
   sheetState();
+  openMic();
 }
 function sheetState(msg) {
   const has = !!voices[sheetWord.say];
-  $('sstate').textContent = msg || (rec ? 'מקליטים… אמרו את המילה ולחצו סיום' : has ? 'נשמע בקול שלכם ✓' : 'עכשיו נשמע בקול המחשב');
-  $('srec').textContent = rec ? '⏹ סיום' : has ? '⏺ להקליט מחדש' : '⏺ להקליט';
+  $('sstate').textContent = msg || (rec ? 'מקליטים… שחררו בסוף המילה' : has ? 'נשמע בקול שלכם ✓' : 'עכשיו נשמע בקול המחשב');
+  $('srec').textContent = rec ? '🔴 מקליטים…' : has ? '🎙️ להחזיק ולהקליט מחדש' : '🎙️ להחזיק ולדבר';
   $('srec').classList.toggle('rec', !!rec);
   $('splay').hidden = !has || !!rec;
   $('sdel').hidden = !has || !!rec;
 }
-async function toggleRec() {
-  if (rec) return rec.stop();
-  let stream;
+/* hold to record, like a voice message. The mic opens with the sheet so a press starts at once; a buzz and a chime mark start and end */
+let stream = null, pressAt = 0;
+async function openMic() {
+  if (stream) return;
   try { stream = await navigator.mediaDevices.getUserMedia({ audio: true }); }
   catch (e) { return sheetState('אין גישה למיקרופון. צריך לאשר אותה בדפדפן.'); }
-  if ($('sheet').hidden) { stream.getTracks().forEach(t => t.stop()); return; }
+  if ($('sheet').hidden) closeMic(); else sheetState();
+}
+function closeMic() { if (stream) stream.getTracks().forEach(t => t.stop()); stream = null; }
+/* navigator.vibrate is Android only; on iPhone (iOS 18+) flipping a native switch gives a haptic tick */
+function buzz() { if (navigator.vibrate) navigator.vibrate(30); else $('haptic').click(); }
+function startRec(e) {
+  e.preventDefault();
+  if (rec) return;
+  if (!stream) return openMic();
+  $('srec').setPointerCapture(e.pointerId);
+  buzz(); tone([660, 990]);
   const w = sheetWord, chunks = [], r = new MediaRecorder(stream);
-  r.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
-  r.onstop = () => {
-    clearTimeout(r.limit); stream.getTracks().forEach(t => t.stop()); rec = null;
-    if (chunks.length) putVoice(w.say, new Blob(chunks, { type: r.mimeType || chunks[0].type }));
-    if (sheetWord === w && !$('sheet').hidden) { sheetState(); if (chunks.length) say(w); }
+  rec = r; pressAt = Date.now();
+  r.ondataavailable = ev => { if (ev.data.size) chunks.push(ev.data); };
+  r.onstop = async () => {
+    rec = null;
+    if (r.short || !chunks.length) return sheetState('צריך להחזיק את הכפתור כל זמן שאומרים את המילה');
+    sheetState('רגע…');
+    const raw = new Blob(chunks, { type: r.mimeType || chunks[0].type });
+    let clip = raw;
+    try { clip = await trimVoice(raw); } catch (err) {}
+    const here = sheetWord === w && !$('sheet').hidden;
+    if (!clip) return here && sheetState('לא שמענו כלום. נסו שוב, קרוב יותר לטלפון');
+    putVoice(w.say, clip);
+    if (here) { sheetState(); say(w); }
   };
-  rec = r; r.start();
-  r.limit = setTimeout(() => r.state === 'recording' && r.stop(), 5000);
+  /* start after the chime so it isn't recorded; 6s at most */
+  r.wait = setTimeout(() => { if (rec !== r) return; r.start(); r.limit = setTimeout(stopRec, 6000); }, 200);
   sheetState();
 }
+function stopRec() {
+  const r = rec;
+  if (!r) return;
+  clearTimeout(r.wait); clearTimeout(r.limit);
+  buzz(); tone([990, 660]);
+  if (r.state !== 'recording') { rec = null; return sheetState('צריך להחזיק את הכפתור כל זמן שאומרים את המילה'); }
+  r.short = Date.now() - pressAt < 500;
+  r.stop();
+}
+/* parents start late and stop late: cut the silence around the word, keeping a margin so a soft onset like בּ isn't clipped,
+   and even out the volume. Returns null when nothing was said */
+async function trimVoice(blob) {
+  const data = await blob.arrayBuffer(), ctx = audio();
+  const buf = await new Promise((ok, no) => ctx.decodeAudioData(data, ok, no));
+  const rate = buf.sampleRate, chans = [...Array(buf.numberOfChannels)].map((_, c) => buf.getChannelData(c));
+  const len = chans[0].length, mono = i => chans.reduce((a, c) => a + c[i], 0) / chans.length;
+  const win = Math.round(rate * 0.02), rms = [];
+  for (let i = 0; i + win <= len; i += win) { let e = 0; for (let j = i; j < i + win; j++) e += mono(j) ** 2; rms.push(Math.sqrt(e / win)); }
+  /* a 100ms moving average, so a tap on the screen doesn't count as speech */
+  const loud = rms.map((_, i) => { const a = rms.slice(Math.max(0, i - 2), i + 3); return a.reduce((x, y) => x + y, 0) / a.length; });
+  const sorted = loud.slice().sort((a, b) => a - b), noise = sorted[sorted.length / 10 | 0] || 0, peak = sorted[sorted.length - 1] || 0;
+  if (peak < 0.01 || peak < noise * 3) return null;
+  /* grow out from the loudest moment, bridging pauses inside the word; a tap 300ms+ away from it stays out */
+  const th = noise + (peak - noise) * 0.15, top = loud.indexOf(peak);
+  const reach = step => { let end = top; for (let i = top, gap = 0; i >= 0 && i < loud.length && gap <= 15; i += step) if (loud[i] > th) { end = i; gap = 0; } else gap++; return end; };
+  const first = reach(-1), last = reach(1);
+  const from = Math.max(0, (first - 8) * win), to = Math.min(len, (last + 14) * win), n = to - from;
+  let max = 0; for (let i = from; i < to; i++) max = Math.max(max, Math.abs(mono(i)));
+  const gain = Math.min(4, 0.9 / (max || 1)), fade = Math.max(1, Math.min(n / 2, rate * 0.01));
+  /* 16-bit mono WAV, which every browser can play back */
+  const out = new DataView(new ArrayBuffer(44 + n * 2)), str = (o, t) => [...t].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
+  str(0, 'RIFF'); out.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
+  out.setUint32(24, rate, true); out.setUint32(28, rate * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true); str(36, 'data'); out.setUint32(40, n * 2, true);
+  for (let i = 0; i < n; i++) {
+    const v = mono(from + i) * gain * Math.min(1, i / fade, (n - 1 - i) / fade);
+    out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, v)) * 0x7fff, true);
+  }
+  return new Blob([out], { type: 'audio/wav' });
+}
 function closeSheet() {
-  if (rec) rec.stop();
+  stopRec();
+  closeMic();
   $('sheet').hidden = true;
   if (sheetDone) sheetDone();
 }
@@ -427,9 +489,10 @@ function renderVoices() {
 }
 
 let ac;
+const audio = () => ac = ac || new (window.AudioContext || window.webkitAudioContext)();
 function tone(freqs) {
   try {
-    ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+    audio();
     freqs.forEach((f, i) => {
       const o = ac.createOscillator(), a = ac.createGain(), t = ac.currentTime + i * 0.11;
       o.frequency.value = f; o.type = 'triangle';
@@ -695,7 +758,9 @@ function finish() {
 
 $('say').onclick = () => { if (g && g.w) say(g.w); };
 $('mic').onclick = () => { if (g && g.w) openSheet(g.w); };
-$('srec').onclick = toggleRec;
+$('srec').onpointerdown = startRec;
+$('srec').onpointerup = $('srec').onpointercancel = stopRec;
+$('srec').oncontextmenu = e => e.preventDefault();
 $('splay').onclick = () => say(sheetWord);
 $('stts').onclick = () => { player.pause(); speak(sheetWord.tts || sheetWord.say); };
 $('sdel').onclick = () => { putVoice(sheetWord.say, null); sheetState(); };
