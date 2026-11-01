@@ -84,6 +84,11 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 .pick .txt { flex: 1; min-width: 0; font-weight: 600; font-size: 18px; color: var(--ink); }
 .pick .ex, #dicts .ex { font-family: var(--letters); font-weight: 400; font-size: 22px; color: var(--pencil); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; line-height: 1.5; }
 .pick .more { flex: none; font-size: 15px; text-decoration: underline; }
+.pick.sub { border-style: solid; border-color: var(--tile-edge); padding: 6px 14px; margin-top: -8px; }
+.pick.sub .txt { font-size: 17px; }
+/* word picker: chosen words ringed, the rest faded */
+#wlist .tile { font-size: 30px; }
+.tile.off { opacity: .4; box-shadow: none; }
 .bar h2 { margin: 0; font-size: 26px; font-weight: 600; color: var(--ink); }
 .stars { flex: none; color: var(--sticker); font-size: 22px; letter-spacing: 2px; }
 .stars i { font-style: normal; opacity: .25; }
@@ -184,6 +189,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
   <section id="home">
     <h1>ההכתבה של אורי</h1>
     <button class="pick" id="pick"><span class="txt"><span id="dname"></span><span class="ex" id="dwords"></span></span><span class="more">הכתבות אחרות</span></button>
+    <button class="pick sub" id="subset"><span class="txt" id="subtxt"></span><span class="more">לבחור מילים</span></button>
     <div class="levels" id="levels"></div>
     <div class="parent">
       <span id="novoice" hidden>במכשיר הזה אין הקראה בעברית. אמרו לה את המילה לפי הציור.</span>
@@ -201,6 +207,20 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
       <h2>איזו הכתבה?</h2>
     </div>
     <div class="levels" id="dicts"></div>
+  </section>
+
+  <section id="words" hidden>
+    <div class="bar">
+      <button class="back" id="wback" aria-label="חזרה">→</button>
+      <h2>עם אילו מילים?</h2>
+    </div>
+    <p class="note">כשיש הרבה מילים, אפשר לעבור את כל השלבים רק עם חלק מהן, ובפעם הבאה עם אחרות. ⭐ = מילה שכבר עברה את כל השלבים.</p>
+    <div class="tray list cols" id="wlist"></div>
+    <div class="row">
+      <button class="btn" id="wall">כל המילים</button>
+      <button class="btn" id="wnext"></button>
+      <button class="btn main" id="wgo">יאללה!</button>
+    </div>
   </section>
 
   <section id="voices" hidden>
@@ -237,6 +257,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
     <div class="row">
       <button class="btn" id="again">עוד פעם</button>
       <button class="btn main" id="onward">לשלב הבא</button>
+      <button class="btn main" id="fresh" hidden>🎲 סבב עם מילים אחרות</button>
     </div>
   </section>
 </div>
@@ -260,6 +281,9 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 /* The dictation catalog, newest first. Paste the teacher's words as written; parse() splits them into letter + nikud.
    An optional third field is what the device voice reads instead, for words it stresses wrong (or record them in the app) */
 const DICTATIONS = [
+  { id: '2026-11-01', title: 'הכתבה חדשה, 1.11', when: '', words: [
+    ['אַבָּא', '👨', 'אבא'], ['גָּרָה', '🏡'], ['אֲגַם', '🏞️'], ['רָאָה', '👀'], ['בָּאָה', '🚶‍♀️'],
+    ['גַּג', '🏠'], ['גַּל', '🌊'], ['שָׁאַל', '❓'], ['גָּמָל', '🐫'], ['בַּלָּשׁ', '🕵️'] ] },
   { id: '2026-10-23', title: 'יום שישי, 23.10', when: 'ביום שישי', words: [
     ['בַּר', '🦁'], ['בַּלָּם', '🛑'], ['רָם', '📢'], ['רָשַׁם', '✏️'], ['שָׁם', '👉'],
     ['בַּמְבָּה', '🥜', 'במבה'], ['בָּמָה', '🎭'], ['רָמָה', '⛰️'], ['לָשָׁה', '👩‍🍳'], ['לָשׁ', '🍞'] ] },
@@ -311,8 +335,10 @@ const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאו
 const KEY = 'ori-dictation-v4';
 const $ = id => document.getElementById(id);
 
-/* prog: stars per dictation id. little: younger siblings' mode — the right answer is highlighted and Ori's stars stay untouched */
-let prog = {}, cur = DICTATIONS[0].id, openAll = false, little = false, g = null, D, best;
+/* prog: stars per dictation id, or per "id:word|word" when playing only some of its words.
+   sel: the words chosen per dictation (none = all). seen: per dictation, how many times each word went through the whole cycle.
+   little: younger siblings' mode — the right answer is highlighted and Ori's stars stay untouched */
+let prog = {}, sel = {}, seen = {}, cur = DICTATIONS[0].id, openAll = false, little = false, g = null, D, best;
 try {
   let s = JSON.parse(localStorage.getItem(KEY));
   if (!s) {
@@ -322,17 +348,34 @@ try {
     if (o && o.best) s = { prog: { 'shin-resh': o.best }, openAll: o.openAll, little: o.little };
   }
   if (s) {
-    prog = s.prog || {}; openAll = !!s.openAll; little = !!s.little;
+    prog = s.prog || {}; sel = s.sel || {}; seen = s.seen || {}; openAll = !!s.openAll; little = !!s.little;
     /* a newly added dictation opens by itself the first time */
     if (s.newest === DICTATIONS[0].id && DICTATIONS.some(d => d.id === s.cur)) cur = s.cur;
   } } catch (e) {}
-const save = () => { try { localStorage.setItem(KEY, JSON.stringify({ prog, cur, newest: DICTATIONS[0].id, openAll, little })); } catch (e) {} };
+function save() {
+  /* keep only word sets that earned stars, so trying out selections leaves nothing behind */
+  prog[D.key] = best;
+  for (const k in prog) if (!prog[k].some(Boolean)) delete prog[k];
+  try { localStorage.setItem(KEY, JSON.stringify({ prog, sel, seen, cur, newest: DICTATIONS[0].id, openAll, little })); } catch (e) {}
+}
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const stars = n => '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i>';
+/* the levels run on D.words — the chosen words — while the letter and nikud choices still come from the whole dictation (D.all) */
 function choose(id) {
   cur = id; D = load(DICTATIONS.find(d => d.id === id));
-  best = prog[id] = LEVELS.map((_, i) => (prog[id] || [])[i] || 0);
+  const all = D.all = D.words, want = sel[id] || [], some = all.filter(w => want.includes(w.say));
+  D.part = some.length > 0 && some.length < all.length;
+  if (D.part) D.words = some; else delete sel[id];
+  D.key = D.part ? id + ':' + some.map(w => w.say).join('|') : id;
+  best = LEVELS.map((_, i) => (prog[D.key] || [])[i] || 0);
 }
+/* n words for the next cycle: the ones gone through fewest times first, then ones not in the current set, the rest by chance */
+function nextSet(n, avoid) {
+  const cnt = seen[cur] || {};
+  return shuffle(D.all).map(w => ({ w, k: (cnt[w.say] || 0) * 2 + (avoid.has(w.say) ? 1 : 0) }))
+    .sort((a, b) => a.k - b.k).slice(0, n).map(x => x.w.say);
+}
+const fewer = () => Math.min(5, Math.ceil(D.all.length / 2));
 const preview = d => d.words.slice(0, 4).map(text).join(' · ') + (d.words.length > 4 ? ' …' : '');
 
 /* sound */
@@ -479,7 +522,7 @@ function closeSheet() {
 }
 function renderVoices() {
   $('vlist').innerHTML = '';
-  D.words.forEach(w => {
+  D.all.forEach(w => {
     const b = document.createElement('button');
     b.className = 'tile'; b.textContent = text(w) + (voices[w.say] ? '  🎙️' : '');
     b.onclick = () => openSheet(w, renderVoices);
@@ -503,11 +546,13 @@ function tone(freqs) {
 }
 
 /* screens */
-function show(id) { ['home', 'catalog', 'voices', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
+function show(id) { ['home', 'catalog', 'words', 'voices', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
 function unlocked(i) { return openAll || i === 0 || best[i - 1] > 0; }
 function renderHome() {
   $('dname').textContent = D.title;
   $('dwords').textContent = preview(D);
+  $('subtxt').textContent = D.part ? `🎯 ${D.words.length} מתוך ${D.all.length} המילים` : `🎯 כל ${D.all.length} המילים`;
+  $('subset').hidden = D.all.length < 4;
   $('levels').innerHTML = '';
   LEVELS.forEach((L, i) => {
     const b = document.createElement('button');
@@ -526,7 +571,9 @@ function renderHome() {
 function renderCatalog() {
   $('dicts').innerHTML = '';
   DICTATIONS.forEach(d => {
-    const b = document.createElement('button'), got = (prog[d.id] || []).reduce((a, n) => a + n, 0);
+    const b = document.createElement('button');
+    /* the best run, whether with all the words or some of them */
+    const got = Math.max(0, ...Object.keys(prog).filter(k => k === d.id || k.startsWith(d.id + ':')).map(k => prog[k].reduce((a, n) => a + n, 0)));
     b.className = 'level' + (d.id === cur ? ' cur' : '');
     b.innerHTML = `<span class="txt">${d.title}<span class="ex">${preview(load(d))}</span></span><span class="stars">${got}/${LEVELS.length * 3} ★</span>`;
     b.onclick = () => { choose(d.id); save(); renderHome(); };
@@ -535,9 +582,35 @@ function renderCatalog() {
   show('catalog');
 }
 
+/* the word picker works on a copy and applies it on the way out */
+let picked;
+function renderWords() {
+  if (!picked) picked = new Set(D.words.map(w => w.say));
+  const cnt = seen[cur] || {}, n = picked.size < D.all.length ? picked.size : fewer();
+  $('wlist').innerHTML = '';
+  D.all.forEach(w => {
+    const b = document.createElement('button'), on = picked.has(w.say);
+    b.className = 'tile ' + (on ? 'hint' : 'off');
+    b.textContent = text(w) + ' ' + w.pic + (cnt[w.say] ? ' ⭐' : '');
+    b.setAttribute('aria-pressed', on);
+    b.onclick = () => {
+      if (on && picked.size === 1) { b.classList.remove('no'); void b.offsetWidth; b.classList.add('no'); return; }
+      if (on) picked.delete(w.say); else picked.add(w.say);
+      renderWords();
+    };
+    $('wlist').appendChild(b);
+  });
+  $('wnext').textContent = `🎲 ${n} אחרות`;
+  show('words');
+}
+function useWords() {
+  sel[cur] = [...picked]; picked = null;
+  choose(cur); save(); renderHome();
+}
+
 function startLevel(i) {
   /* a long list gets one pass so a round stays a few minutes */
-  const L = LEVELS[i], reps = D.words.length > 5 ? 1 : L.reps;
+  const L = LEVELS[i], reps = D.words.length > 3 ? 1 : L.reps;
   let queue = [];
   for (let r = 0; r < reps; r++) {
     let block = shuffle(D.words);
@@ -745,13 +818,21 @@ function startDictation() {
 
 function finish() {
   const n = g.clean === g.total ? 3 : g.clean * 2 >= g.total ? 2 : 1;
-  if (!little) { best[g.lvl] = Math.max(best[g.lvl], n); save(); }
   const last = g.lvl === LEVELS.length - 1;
+  if (!little) {
+    best[g.lvl] = Math.max(best[g.lvl], n);
+    if (last) { const c = seen[cur] = seen[cur] || {}; D.words.forEach(w => c[w.say] = (c[w.say] || 0) + 1); }
+    save();
+  }
+  /* after the whole cycle with some of the words, offer the next words; the class wish waits until every word had its turn */
+  const rest = D.part && D.all.some(w => !(seen[cur] || {})[w.say]);
   $('bigstars').innerHTML = stars(n);
   $('donetitle').textContent = last ? 'סיימת את כל השלבים!' : 'סיימת את שלב ' + (g.lvl + 1) + '!';
   $('mission').textContent = (D.when ? D.when + ' ' : '') + 'בכיתה עושים בדיוק אותו דבר. בהצלחה!';
-  $('mission').hidden = !last;
+  $('mission').hidden = !last || rest;
+  $('fresh').hidden = !(last && D.part);
   $('onward').textContent = last ? 'לכל השלבים' : 'לשלב הבא';
+  $('onward').classList.toggle('main', !(last && D.part));
   tone([523, 659, 784, 1047]);
   show('done');
 }
@@ -771,6 +852,11 @@ $('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cance
 $('again').onclick = () => startLevel(g.lvl);
 $('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
 $('pick').onclick = renderCatalog;
+$('subset').onclick = () => { picked = null; renderWords(); };
+$('wall').onclick = () => { picked = new Set(D.all.map(w => w.say)); renderWords(); };
+$('wnext').onclick = () => { const n = picked.size < D.all.length ? picked.size : fewer(); picked = new Set(nextSet(n, picked)); renderWords(); };
+$('wgo').onclick = $('wback').onclick = useWords;
+$('fresh').onclick = () => { sel[cur] = nextSet(D.words.length, new Set(D.words.map(w => w.say))); choose(cur); save(); renderHome(); };
 $('catback').onclick = renderHome;
 $('little').onchange = e => { little = e.target.checked; save(); renderHome(); };
 $('openall').onchange = e => { openAll = e.target.checked; save(); renderHome(); };
