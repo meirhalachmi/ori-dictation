@@ -326,6 +326,7 @@ function load(d) {
 
 const LEVELS = [
   { title: 'רק אותיות', ex: d => d.bases.slice(0, 3).join(' '), mode: 'letters', reps: 2, task: 'איזו אות באה עכשיו?' },
+  { title: 'רק ניקוד', ex: d => d.nikud.filter(Boolean).slice(0, 3).map(n => '◌' + n).join(' '), mode: 'marks', reps: 1, task: '' },
   { title: 'אותיות עם ניקוד', ex: d => d.pointed.slice(0, 3).join(' '), mode: 'pointed', reps: 2, task: 'בחרי אות עם הניקוד הנכון' },
   { title: 'קודם אות, אחר כך ניקוד', ex: d => d.sample[0] + ' ← ' + glyph(d.sample), mode: 'split', reps: 1, task: '' },
   { title: 'בלי עזרה', ex: () => '? ? ?', mode: 'free', reps: 1, task: 'בני את כל המילה ולחצי בדיקה' },
@@ -333,6 +334,8 @@ const LEVELS = [
 ];
 const PRAISE = ['כל הכבוד!', 'יופי!', 'מעולה!', 'נכון מאוד!', 'אלופה!'];
 const KEY = 'ori-dictation-v4';
+/* the levels as saved before 'marks' came in second; stars are kept by level, not by position */
+const OLD_LEVELS = ['letters', 'pointed', 'split', 'free', 'dictation'];
 const $ = id => document.getElementById(id);
 
 /* prog: stars per dictation id, or per "id:word|word" when playing only some of its words.
@@ -348,7 +351,10 @@ try {
     if (o && o.best) s = { prog: { 'shin-resh': o.best }, openAll: o.openAll, little: o.little };
   }
   if (s) {
-    prog = s.prog || {}; sel = s.sel || {}; seen = s.seen || {}; openAll = !!s.openAll; little = !!s.little;
+    prog = s.prog || {};
+    const was = s.levels || OLD_LEVELS;
+    for (const k in prog) prog[k] = LEVELS.map(L => prog[k][was.indexOf(L.mode)] || 0);
+    sel = s.sel || {}; seen = s.seen || {}; openAll = !!s.openAll; little = !!s.little;
     /* a newly added dictation opens by itself the first time */
     if (s.newest === DICTATIONS[0].id && DICTATIONS.some(d => d.id === s.cur)) cur = s.cur;
   } } catch (e) {}
@@ -356,7 +362,7 @@ function save() {
   /* keep only word sets that earned stars, so trying out selections leaves nothing behind */
   prog[D.key] = best;
   for (const k in prog) if (!prog[k].some(Boolean)) delete prog[k];
-  try { localStorage.setItem(KEY, JSON.stringify({ prog, sel, seen, cur, newest: DICTATIONS[0].id, openAll, little })); } catch (e) {}
+  try { localStorage.setItem(KEY, JSON.stringify({ prog, levels: LEVELS.map(L => L.mode), sel, seen, cur, newest: DICTATIONS[0].id, openAll, little })); } catch (e) {}
 }
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const stars = n => '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i>';
@@ -547,7 +553,8 @@ function tone(freqs) {
 
 /* screens */
 function show(id) { ['home', 'catalog', 'words', 'voices', 'game', 'done'].forEach(s => $(s).hidden = s !== id); }
-function unlocked(i) { return openAll || i === 0 || best[i - 1] > 0; }
+/* a level opens with stars on the one before it — or on any later one, so a level added in between doesn't lock what she already reached */
+function unlocked(i) { return openAll || i === 0 || best.slice(i - 1).some(Boolean); }
 function renderHome() {
   $('dname').textContent = D.title;
   $('dwords').textContent = preview(D);
@@ -628,7 +635,9 @@ function nextQ() {
   if (g.qi >= g.queue.length) return finish();
   const item = g.queue[g.qi];
   Object.assign(g, { item, w: item.w, order: shuffle(D.nikud), pos: 0, mistakes: 0, slotMist: 0, sel: null, busy: false, built: [], marks: null, fails: 0,
-    phase: g.L.mode === 'split' ? 'letters' : g.L.mode, done: item.w.parts.map(() => false) });
+    phase: g.L.mode === 'split' ? 'letters' : g.L.mode === 'marks' ? 'nikud' : g.L.mode, done: item.w.parts.map(() => false) });
+  /* only nikud: the letters are already in place and the first one waits for its nikud */
+  if (g.L.mode === 'marks') { g.sel = 0; g.pos = g.w.parts.length; }
   $('prog').style.width = (g.qi / g.queue.length * 100) + '%';
   $('pic').textContent = g.w.pic;
   $('model').hidden = true;
