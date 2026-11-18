@@ -388,9 +388,16 @@ function nextSet(n, avoid) {
 const fewer = () => Math.min(5, Math.ceil(D.all.length / 2));
 const preview = d => d.words.slice(0, 4).map(text).join(' · ') + (d.words.length > 4 ? ' …' : '');
 
-/* sound */
+/* sound. Inside the family tablet the tablet reads the words with its own Hebrew voice: its kiosk browser has none
+   (SimpleKiosk, 18.11), and the tablet's is the same voice as on every other screen there */
+const inTablet = window.parent !== window;
 const synth = window.speechSynthesis;
+function hush() {
+  if (synth) synth.cancel();
+  if (inTablet) try { window.parent.postMessage({ type: 'ori-dictation-hush' }, '*'); } catch (e) {}
+}
 function speak(t) {
+  if (inTablet) { try { window.parent.postMessage({ type: 'ori-dictation-say', text: t }, '*'); } catch (e) {} return; }
   if (!synth) return;
   try {
     synth.cancel();
@@ -404,7 +411,7 @@ function speak(t) {
 /* a parent's recording of the word wins over the device voice; one shared player so iOS keeps it unlocked after the first tap */
 const player = new Audio(), voices = {};
 function say(w) {
-  if (synth) synth.cancel();
+  hush();
   player.pause();
   if (voices[w.say]) { player.src = voices[w.say]; player.play().catch(() => speak(w.tts || w.say)); }
   else speak(w.tts || w.say);
@@ -433,7 +440,7 @@ const canRecord = !!(window.MediaRecorder && navigator.mediaDevices && navigator
 let sheetWord = null, rec = null, sheetDone = null;
 function openSheet(w, done) {
   if (g) clearTimeout(g.timer);
-  if (synth) synth.cancel();
+  hush();
   player.pause();
   sheetWord = w; sheetDone = done;
   $('sword').textContent = text(w);
@@ -575,7 +582,7 @@ function renderHome() {
   $('little').checked = little;
   $('openall').checked = openAll;
   $('reset').hidden = !best.some(Boolean);
-  $('novoice').hidden = !!synth;
+  $('novoice').hidden = !!synth || inTablet;
   $('recwords').hidden = !canRecord;
   show('home');
 }
@@ -861,7 +868,7 @@ $('sdel').onclick = () => { putVoice(sheetWord.say, null); sheetState(); };
 $('sclose').onclick = closeSheet;
 $('recwords').onclick = renderVoices;
 $('vback').onclick = renderHome;
-$('back').onclick = () => { if (g) clearTimeout(g.timer); if (synth) synth.cancel(); player.pause(); renderHome(); };
+$('back').onclick = () => { if (g) clearTimeout(g.timer); hush(); player.pause(); renderHome(); };
 $('again').onclick = () => startLevel(g.lvl);
 $('onward').onclick = () => g.lvl === LEVELS.length - 1 ? renderHome() : startLevel(g.lvl + 1);
 $('pick').onclick = renderCatalog;
