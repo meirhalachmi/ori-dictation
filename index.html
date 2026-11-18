@@ -159,6 +159,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
   padding: 12px 20px; font-weight: 600; font-size: 20px; color: var(--ink);
 }
 .btn.main { background: var(--ink); color: var(--paper); border-color: var(--ink); }
+.oops { font-size: 26px; text-align: center; margin: 40px 0 20px; }
 
 /* done */
 #done { align-items: center; justify-content: center; text-align: center; }
@@ -278,20 +279,9 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
 </div>
 
 <script>
-/* The dictation catalog, newest first. Paste the teacher's words as written; parse() splits them into letter + nikud.
-   An optional third field is what the device voice reads instead, for words it stresses wrong (or record them in the app) */
-const DICTATIONS = [
-  { id: '2026-11-18', title: 'הכתבה חדשה, 18.11', when: '', words: [
-    ['גַנָן', '👨‍🌾'], ['גַן', '🌷'], ['הָיָה', '⏳'], ['שָׁתַל', '🌱'],
-    ['חַם', '🔥'], ['אַבָּא', '👨', 'אבא'], ['נָתַן', '🎁'], ['שָׂמַח', '😀'] ] },
-  { id: '2026-11-01', title: 'הכתבה חדשה, 1.11', when: '', words: [
-    ['אַבָּא', '👨', 'אבא'], ['גָּרָה', '🏡'], ['אֲגַם', '🏞️'], ['רָאָה', '👀'], ['בָּאָה', '🚶‍♀️'],
-    ['גַּג', '🏠'], ['גַּל', '🌊'], ['שָׁאַל', '❓'], ['גָּמָל', '🐫'], ['בַּלָּשׁ', '🕵️'] ] },
-  { id: '2026-10-23', title: 'יום שישי, 23.10', when: 'ביום שישי', words: [
-    ['בַּר', '🦁'], ['בַּלָּם', '🛑'], ['רָם', '📢'], ['רָשַׁם', '✏️'], ['שָׁם', '👉'],
-    ['בַּמְבָּה', '🥜', 'במבה'], ['בָּמָה', '🎭'], ['רָמָה', '⛰️'], ['לָשָׁה', '👩‍🍳'], ['לָשׁ', '🍞'] ] },
-  { id: 'shin-resh', title: 'ההכתבה הראשונה', when: '', words: [['שָׁר', '🎤'], ['רָשׁ', '🪙'], ['רַשְׁרַשׁ', '🍃']] },
-];
+/* The dictation catalog is dictations.json (newest first), so the family tablet reads the same list: it shows the
+   coming dictation on Ori's school screen and opens this page inside it, at ?d=<id> */
+let DICTATIONS = [];
 const FINALS = 'ךםןףץ', TWIN = { 'ך': 'כ', 'ם': 'מ', 'ן': 'נ', 'ף': 'פ', 'ץ': 'צ', 'כ': 'ך', 'מ': 'ם', 'נ': 'ן', 'פ': 'ף', 'צ': 'ץ' };
 const glyph = p => p[0] + p[1];
 const text = w => w.parts.map(glyph).join('');
@@ -344,7 +334,9 @@ const $ = id => document.getElementById(id);
 /* prog: stars per dictation id, or per "id:word|word" when playing only some of its words.
    sel: the words chosen per dictation (none = all). seen: per dictation, how many times each word went through the whole cycle.
    little: younger siblings' mode — the right answer is highlighted and Ori's stars stay untouched */
-let prog = {}, sel = {}, seen = {}, cur = DICTATIONS[0].id, openAll = false, little = false, g = null, D, best;
+let prog = {}, sel = {}, seen = {}, cur, openAll = false, little = false, g = null, D, best;
+function restore() {
+  cur = DICTATIONS[0].id;
 try {
   let s = JSON.parse(localStorage.getItem(KEY));
   if (!s) {
@@ -361,11 +353,20 @@ try {
     /* a newly added dictation opens by itself the first time */
     if (s.newest === DICTATIONS[0].id && DICTATIONS.some(d => d.id === s.cur)) cur = s.cur;
   } } catch (e) {}
+}
 function save() {
   /* keep only word sets that earned stars, so trying out selections leaves nothing behind */
   prog[D.key] = best;
   for (const k in prog) if (!prog[k].some(Boolean)) delete prog[k];
   try { localStorage.setItem(KEY, JSON.stringify({ prog, levels: LEVELS.map(L => L.mode), sel, seen, cur, newest: DICTATIONS[0].id, openAll, little })); } catch (e) {}
+  report();
+}
+/* inside the family tablet: tell it the stars per dictation, for the card on her school screen */
+function report() {
+  if (window.parent === window) return;
+  const out = {};
+  DICTATIONS.forEach(d => out[d.id] = Math.max(0, ...Object.keys(prog).filter(k => k === d.id || k.startsWith(d.id + ':')).map(k => prog[k].reduce((a, n) => a + n, 0))));
+  try { window.parent.postMessage({ type: 'ori-dictation', stars: out, max: LEVELS.length * 3 }, '*'); } catch (e) {}
 }
 const shuffle = a => { a = a.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.random() * (i + 1) | 0; [a[i], a[j]] = [a[j], a[i]]; } return a; };
 const stars = n => '★'.repeat(n) + '<i>' + '★'.repeat(3 - n) + '</i>';
@@ -876,9 +877,19 @@ $('reset').onclick = () => { if (!confirm('לאפס את הכוכבים של ה�
 /* no pinch zoom: iOS Safari ignores user-scalable=no */
 document.addEventListener('gesturestart', e => e.preventDefault());
 if (synth) synth.getVoices();
-choose(cur);
-renderHome();
-loadVoices();
+fetch('dictations.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw r; return r.json(); }).then(list => {
+  DICTATIONS = list;
+  restore();
+  const want = new URLSearchParams(location.search).get('d');
+  if (DICTATIONS.some(d => d.id === want)) cur = want;
+  choose(cur);
+  renderHome();
+  report();
+  loadVoices();
+}).catch(() => {
+  $('home').hidden = false;
+  $('home').innerHTML = '<p class="oops">אין חיבור לאינטרנט 😕</p><button class="btn main" onclick="location.reload()">לנסות שוב</button>';
+});
 </script>
 </body>
 </html>
