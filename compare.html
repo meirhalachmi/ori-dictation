@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>השוואת קולות</title>
+<style>
+/* the voice samples side by side, to pick the dictation's voice by ear (19.11). Played through one <audio>, as the
+   dictation page plays its words */
+:root { --paper: #f7f8fb; --card: #fff; --ink: #2343b0; --text: #222; --muted: #667; --edge: #d8dcea; color-scheme: light; }
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) { --paper: #15201c; --card: #1d2a25; --ink: #9fb8ff; --text: #eee; --muted: #a9b3ae; --edge: #34463f; color-scheme: dark; }
+}
+:root[data-theme="dark"] { --paper: #15201c; --card: #1d2a25; --ink: #9fb8ff; --text: #eee; --muted: #a9b3ae; --edge: #34463f; color-scheme: dark; }
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--paper); color: var(--text); font: 17px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+main { max-width: 640px; margin: 0 auto; padding: 20px 16px 48px; }
+h1 { color: var(--ink); font-size: 26px; margin: 0 0 6px; }
+p { color: var(--muted); margin: 0 0 18px; }
+.voice { background: var(--card); border: 1px solid var(--edge); border-radius: 16px; padding: 14px; margin-bottom: 14px; }
+.head { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; }
+.head h2 { flex: 1; font-size: 18px; margin: 0; }
+.words { display: flex; flex-wrap: wrap; gap: 8px; }
+button { font: inherit; border: 1px solid var(--edge); background: var(--paper); color: var(--text); border-radius: 12px; padding: 8px 14px; cursor: pointer; }
+.words button { font-size: 22px; min-width: 64px; }
+.all { background: var(--ink); color: var(--paper); border-color: var(--ink); font-weight: 600; }
+button.on { outline: 3px solid var(--ink); }
+.oops { color: #c33; }
+</style>
+</head>
+<body>
+<main>
+  <h1>איזה קול להכתבה?</h1>
+  <p>אותן מילים בכל קול. כדאי להקשיב בטלפון, ברמקול. "אַבָּא" מופיעה פעמיים: עם ניקוד ובלי, כי קולות לפעמים מטעימים מילה מנוקדת לא נכון.</p>
+  <div id="list"></div>
+</main>
+<script>
+const player = new Audio();
+let queue = [], lit = null;
+function light(b) { if (lit) lit.classList.remove('on'); lit = b; if (b) b.classList.add('on'); }
+function play(src, b) { queue = []; light(b); player.src = src; player.play().catch(() => {}); }
+player.onended = () => { const n = queue.shift(); if (n) { light(n.b); player.src = n.src; player.play().catch(() => {}); } else light(null); };
+fetch('compare/list.json', { cache: 'no-cache' }).then(r => r.json()).then(({ words, voices }) => {
+  voices.forEach(([key, name]) => {
+    const card = document.createElement('section'); card.className = 'voice';
+    card.innerHTML = '<div class="head"><h2></h2><button class="all">▶ הכול</button></div><div class="words"></div>';
+    card.querySelector('h2').textContent = name;
+    const btns = words.map((w, i) => {
+      const b = document.createElement('button'); b.textContent = w;
+      b.onclick = () => play(`compare/${key}-${i}.mp3`, b);
+      card.querySelector('.words').appendChild(b);
+      return { b, src: `compare/${key}-${i}.mp3` };
+    });
+    card.querySelector('.all').onclick = () => { const [f, ...rest] = btns; play(f.src, f.b); queue = rest; };
+    document.getElementById('list').appendChild(card);
+  });
+}).catch(() => { document.getElementById('list').innerHTML = '<p class="oops">הדוגמאות עוד לא מוכנות, לנסות שוב בעוד דקה</p>'; });
+</script>
+</body>
+</html>
