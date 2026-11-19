@@ -1,0 +1,28 @@
+# Make the words' mp3s (scripts/make_audio.py) whenever the dictations change, and commit them.
+name: word audio
+on:
+  push:
+    paths: [dictations.json, scripts/make_audio.py, .github/workflows/audio.yml]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: audio-${{ github.ref }}
+jobs:
+  audio:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: pip install edge-tts==7.3.1
+      - run: python scripts/make_audio.py
+      - name: commit
+        run: |
+          git add audio
+          git diff --cached --quiet && exit 0
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Make the words audio'
+          git push

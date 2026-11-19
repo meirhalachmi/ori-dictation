@@ -438,11 +438,16 @@ function wake() {
   if (ac && ac.state !== 'running') ac.resume().catch(() => {});
 }
 if (!inTablet) ['pointerdown', 'touchend', 'click'].forEach(e => addEventListener(e, wake, true));
+/* the words read ahead of time by a neural Hebrew voice (scripts/make_audio.py): a file plays on an iPhone on silent and in
+   any browser, where the device voice may be muted or missing (19.11). Inside the family tablet its own voice reads */
+let made = {};
+if (!inTablet) fetch('audio/index.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : {}).then(m => { made = m; if (D) voiceNotes(); }).catch(() => {});
 function say(w) {
   hush();
   player.pause();
-  if (voices[w.say]) { player.src = voices[w.say]; player.play().catch(() => speak(w.tts || w.say)); }
-  else speak(w.tts || w.say);
+  const t = w.tts || w.say, src = voices[w.say] || (made[t] && 'audio/' + made[t]);
+  if (src) { player.src = src; player.play().catch(() => speak(t)); }
+  else speak(t);
 }
 const db = new Promise((ok, no) => {
   const r = indexedDB.open('ori-dictation', 1);
@@ -615,8 +620,7 @@ function renderHome() {
   $('little').checked = little;
   $('openall').checked = openAll;
   $('reset').hidden = !best.some(Boolean);
-  $('novoice').hidden = hasHebrew() || inTablet;
-  $('iosmute').hidden = !iOS || inTablet;
+  voiceNotes();
   $('recwords').hidden = !canRecord;
   show('home');
 }
@@ -897,7 +901,11 @@ $('srec').onpointerdown = startRec;
 $('srec').onpointerup = $('srec').onpointercancel = stopRec;
 $('srec').oncontextmenu = e => e.preventDefault();
 $('splay').onclick = () => say(sheetWord);
-$('stts').onclick = () => { player.pause(); speak(sheetWord.tts || sheetWord.say); };
+$('stts').onclick = () => {
+  const t = sheetWord.tts || sheetWord.say;
+  hush(); player.pause();
+  if (made[t]) { player.src = 'audio/' + made[t]; player.play().catch(() => speak(t)); } else speak(t);
+};
 $('sdel').onclick = () => { putVoice(sheetWord.say, null); sheetState(); };
 $('sclose').onclick = closeSheet;
 $('recwords').onclick = renderVoices;
@@ -919,6 +927,12 @@ $('reset').onclick = () => { if (!confirm('לאפס את הכוכבים של ה�
 document.addEventListener('gesturestart', e => e.preventDefault());
 /* the voices fill in late; when the browser lists some and none is Hebrew (an app's built-in browser, a phone without
    a Hebrew voice) say so on the home screen. An empty list proves nothing, so it doesn't count */
+/* the notes about the device voice, only while some word of this dictation has no file yet */
+function voiceNotes() {
+  const filed = inTablet || (D && D.all.every(w => made[w.tts || w.say]));
+  $('novoice').hidden = filed || hasHebrew();
+  $('iosmute').hidden = filed || !iOS;
+}
 function hasHebrew() {
   if (!synth) return false;
   const vs = synth.getVoices();
@@ -926,7 +940,7 @@ function hasHebrew() {
 }
 if (synth) {
   synth.getVoices();
-  synth.addEventListener?.('voiceschanged', () => { $('novoice').hidden = hasHebrew() || inTablet; });
+  synth.addEventListener?.('voiceschanged', voiceNotes);
 }
 fetch('dictations.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw r; return r.json(); }).then(list => {
   DICTATIONS = list;
