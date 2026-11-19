@@ -194,6 +194,7 @@ h1 { font-size: 34px; font-weight: 600; color: var(--ink); margin: 8px 0 0; text
     <div class="levels" id="levels"></div>
     <div class="parent">
       <span id="novoice" hidden>במכשיר הזה אין הקראה בעברית. אמרו לה את המילה לפי הציור.</span>
+      <span id="iosmute" hidden>באייפון לא שומעים את המילים? לבדוק שהמתג בצד הטלפון לא על שקט 🔕</span>
       <h2>להורים</h2>
       <label class="toggle"><input type="checkbox" id="little"><span>מוד אחים קטנים 🧸<small>התשובה הנכונה מסומנת, והכוכבים לא נשמרים</small></span></label>
       <label class="toggle"><input type="checkbox" id="openall"><span>כל השלבים פתוחים</span></label>
@@ -392,24 +393,51 @@ const preview = d => d.words.slice(0, 4).map(text).join(' · ') + (d.words.lengt
    (SimpleKiosk, 18.11), and the tablet's is the same voice as on every other screen there */
 const inTablet = window.parent !== window;
 const synth = window.speechSynthesis;
+const iOS = /iP(hone|ad|od)/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+/* Safari drops a word spoken right after a cancel (an iPhone heard nothing, 19.11), so a word that cuts another off waits a moment */
+let cutAt = 0, sayId = 0, utter;
+function cut() {
+  sayId++;
+  if (synth && (synth.speaking || synth.pending)) { try { synth.cancel(); } catch (e) {} cutAt = Date.now(); }
+}
 function hush() {
-  if (synth) synth.cancel();
+  cut();
   if (inTablet) try { window.parent.postMessage({ type: 'ori-dictation-hush' }, '*'); } catch (e) {}
 }
 function speak(t) {
   if (inTablet) { try { window.parent.postMessage({ type: 'ori-dictation-say', text: t }, '*'); } catch (e) {} return; }
   if (!synth) return;
-  try {
-    synth.cancel();
-    const u = new SpeechSynthesisUtterance(t);
-    u.lang = 'he-IL'; u.rate = 0.75;
-    const v = synth.getVoices().find(v => /^(he|iw)/i.test(v.lang));
-    if (v) u.voice = v;
-    synth.speak(u);
-  } catch (e) {}
+  cut();
+  const id = sayId, wait = 150 - (Date.now() - cutAt);
+  const go = () => {
+    if (id !== sayId) return;
+    try {
+      /* kept in a variable: Safari forgets an utterance nothing points to before it is heard */
+      const u = utter = new SpeechSynthesisUtterance(t);
+      u.lang = 'he-IL'; u.rate = 0.75; u.volume = 1;
+      const v = synth.getVoices().find(v => /^(he|iw)/i.test(v.lang));
+      if (v) u.voice = v;
+      synth.speak(u);
+    } catch (e) {}
+  };
+  /* right away when nothing was cut, so the first word still counts as part of the tap that iOS asks for */
+  if (wait > 0) setTimeout(go, wait); else go();
 }
 /* a parent's recording of the word wins over the device voice; one shared player so iOS keeps it unlocked after the first tap */
 const player = new Audio(), voices = {};
+/* iPhone: with the ring switch on silent the page's sounds stay mute however loud the volume. Ask for the media sound,
+   which plays like a video does: 'playback' where Safari has it (iOS 17+), and on the first touch a moment of silence
+   through an <audio>, which moves the page there on older ones */
+try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
+function wake() {
+  ['pointerdown', 'touchend', 'click'].forEach(e => removeEventListener(e, wake, true));
+  try {
+    const a = new Audio(URL.createObjectURL(wav(800, 8000, () => 0)));
+    a.setAttribute('playsinline', ''); a.play().catch(() => {});
+  } catch (e) {}
+  if (ac && ac.state !== 'running') ac.resume().catch(() => {});
+}
+if (!inTablet) ['pointerdown', 'touchend', 'click'].forEach(e => addEventListener(e, wake, true));
 function say(w) {
   hush();
   player.pause();
@@ -521,14 +549,14 @@ async function trimVoice(blob) {
   const from = Math.max(0, (first - 8) * win), to = Math.min(len, (last + 14) * win), n = to - from;
   let max = 0; for (let i = from; i < to; i++) max = Math.max(max, Math.abs(mono(i)));
   const gain = Math.min(4, 0.9 / (max || 1)), fade = Math.max(1, Math.min(n / 2, rate * 0.01));
-  /* 16-bit mono WAV, which every browser can play back */
+  return wav(n, rate, i => mono(from + i) * gain * Math.min(1, i / fade, (n - 1 - i) / fade));
+}
+/* 16-bit mono WAV, which every browser can play back */
+function wav(n, rate, at) {
   const out = new DataView(new ArrayBuffer(44 + n * 2)), str = (o, t) => [...t].forEach((c, i) => out.setUint8(o + i, c.charCodeAt(0)));
   str(0, 'RIFF'); out.setUint32(4, 36 + n * 2, true); str(8, 'WAVEfmt '); out.setUint32(16, 16, true); out.setUint16(20, 1, true); out.setUint16(22, 1, true);
   out.setUint32(24, rate, true); out.setUint32(28, rate * 2, true); out.setUint16(32, 2, true); out.setUint16(34, 16, true); str(36, 'data'); out.setUint32(40, n * 2, true);
-  for (let i = 0; i < n; i++) {
-    const v = mono(from + i) * gain * Math.min(1, i / fade, (n - 1 - i) / fade);
-    out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, v)) * 0x7fff, true);
-  }
+  for (let i = 0; i < n; i++) out.setInt16(44 + i * 2, Math.max(-1, Math.min(1, at(i))) * 0x7fff, true);
   return new Blob([out], { type: 'audio/wav' });
 }
 function closeSheet() {
@@ -549,7 +577,12 @@ function renderVoices() {
 }
 
 let ac;
-const audio = () => ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+const audio = () => {
+  ac = ac || new (window.AudioContext || window.webkitAudioContext)();
+  /* iOS suspends it after a call or a while in the background */
+  if (ac.state !== 'running') ac.resume().catch(() => {});
+  return ac;
+};
 function tone(freqs) {
   try {
     audio();
@@ -582,7 +615,8 @@ function renderHome() {
   $('little').checked = little;
   $('openall').checked = openAll;
   $('reset').hidden = !best.some(Boolean);
-  $('novoice').hidden = !!synth || inTablet;
+  $('novoice').hidden = hasHebrew() || inTablet;
+  $('iosmute').hidden = !iOS || inTablet;
   $('recwords').hidden = !canRecord;
   show('home');
 }
@@ -883,7 +917,17 @@ $('openall').onchange = e => { openAll = e.target.checked; save(); renderHome();
 $('reset').onclick = () => { if (!confirm('לאפס את הכוכבים של ההכתבה הזאת ולהתחיל משלב 1?')) return; best.fill(0); save(); renderHome(); };
 /* no pinch zoom: iOS Safari ignores user-scalable=no */
 document.addEventListener('gesturestart', e => e.preventDefault());
-if (synth) synth.getVoices();
+/* the voices fill in late; when the browser lists some and none is Hebrew (an app's built-in browser, a phone without
+   a Hebrew voice) say so on the home screen. An empty list proves nothing, so it doesn't count */
+function hasHebrew() {
+  if (!synth) return false;
+  const vs = synth.getVoices();
+  return !vs.length || vs.some(v => /^(he|iw)/i.test(v.lang));
+}
+if (synth) {
+  synth.getVoices();
+  synth.addEventListener?.('voiceschanged', () => { $('novoice').hidden = hasHebrew() || inTablet; });
+}
 fetch('dictations.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw r; return r.json(); }).then(list => {
   DICTATIONS = list;
   restore();
