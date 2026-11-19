@@ -615,7 +615,7 @@ function renderHome() {
   $('little').checked = little;
   $('openall').checked = openAll;
   $('reset').hidden = !best.some(Boolean);
-  $('novoice').hidden = !!synth || inTablet;
+  $('novoice').hidden = hasHebrew() || inTablet;
   $('iosmute').hidden = !iOS || inTablet;
   $('recwords').hidden = !canRecord;
   show('home');
@@ -917,7 +917,17 @@ $('openall').onchange = e => { openAll = e.target.checked; save(); renderHome();
 $('reset').onclick = () => { if (!confirm('לאפס את הכוכבים של ההכתבה הזאת ולהתחיל משלב 1?')) return; best.fill(0); save(); renderHome(); };
 /* no pinch zoom: iOS Safari ignores user-scalable=no */
 document.addEventListener('gesturestart', e => e.preventDefault());
-if (synth) synth.getVoices();
+/* the voices fill in late; when the browser lists some and none is Hebrew (an app's built-in browser, a phone without
+   a Hebrew voice) say so on the home screen. An empty list proves nothing, so it doesn't count */
+function hasHebrew() {
+  if (!synth) return false;
+  const vs = synth.getVoices();
+  return !vs.length || vs.some(v => /^(he|iw)/i.test(v.lang));
+}
+if (synth) {
+  synth.getVoices();
+  synth.addEventListener?.('voiceschanged', () => { $('novoice').hidden = hasHebrew() || inTablet; });
+}
 fetch('dictations.json', { cache: 'no-cache' }).then(r => { if (!r.ok) throw r; return r.json(); }).then(list => {
   DICTATIONS = list;
   restore();
