@@ -438,7 +438,7 @@ function wake() {
   if (ac && ac.state !== 'running') ac.resume().catch(() => {});
 }
 if (!inTablet) ['pointerdown', 'touchend', 'click'].forEach(e => addEventListener(e, wake, true));
-/* the words read ahead of time by a neural Hebrew voice (scripts/make_audio.py): a file plays on an iPhone on silent and in
+/* the words read ahead of time by Google's Hebrew voice (scripts/make_audio.py): a file plays on an iPhone on silent and in
    any browser, where the device voice may be muted or missing (19.11). Inside the family tablet its own voice reads */
 let made = {};
 if (!inTablet) fetch('audio/index.json', { cache: 'no-cache' }).then(r => r.ok ? r.json() : {}).then(m => { made = m; if (D) voiceNotes(); }).catch(() => {});

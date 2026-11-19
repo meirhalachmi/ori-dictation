@@ -16,7 +16,7 @@ newest first:
   and shows the coming dictation on Ori's school screen, with a button that opens this page inside
   the tablet at `?d=<id>`; the page then tells the tablet her stars (`postMessage`).
 - `when`: said in the closing words of the last level ("ביום ראשון בכיתה עושים בדיוק אותו דבר").
-- Audio: on every change to `dictations.json` a GitHub Action (`.github/workflows/audio.yml`) reads each word with a
-  Hebrew neural voice (`scripts/make_audio.py`, edge-tts) into `audio/`, and the page plays those files: an iPhone on
+- Audio: on every change to `dictations.json` a GitHub Action (`.github/workflows/audio.yml`) reads each word with
+  Google's Hebrew voice (`scripts/make_audio.py`, gTTS, as on the family tablet) into `audio/`, and the page plays those files: an iPhone on
   silent mutes the browser's own voice but plays a file. A parent's recording still comes first, and a word with no
   file yet falls back to the device voice. The `tts` reading above is used for the file too.

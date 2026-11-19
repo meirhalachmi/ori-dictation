@@ -16,7 +16,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: pip install edge-tts==7.3.1
+      - run: pip install gTTS==2.5.4
       - run: python scripts/make_audio.py
       - name: commit
         run: |
